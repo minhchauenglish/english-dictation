@@ -111,7 +111,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 📝 {exercise.sentences.length} câu
               </span>
               <span className="bg-white px-2 py-1 rounded-md border border-slate-200 font-semibold">
-                🗣️ Giọng {exercise.voiceAccent} ({exercise.playbackSpeed}x)
+                🗣️ {exercise.voiceMode === 'NATURAL' ? '✨ Giọng Tự nhiên' : exercise.voiceMode === 'CUSTOM' ? `🎙️ ${exercise.preferredVoiceName || 'Tùy chỉnh'}` : `Giọng ${exercise.voiceAccent}`} ({exercise.playbackSpeed || 0.9}x)
               </span>
               <span className="bg-white px-2 py-1 rounded-md border border-slate-200 font-semibold">
                 🎯 {exercise.checkMode === 'EASY' ? 'Chế độ Dễ' : 'Chính xác'}

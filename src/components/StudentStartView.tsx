@@ -62,11 +62,19 @@ export const StudentStartView: React.FC<StudentStartViewProps> = ({
             {exercise.title}
           </h2>
           <div className="flex items-center justify-center flex-wrap gap-2 text-xs text-slate-500">
+            <span className={`px-2.5 py-1 rounded-full font-bold ${exercise.exerciseMode === 'TEST' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-indigo-100 text-indigo-800'}`}>
+              {exercise.exerciseMode === 'TEST' ? '⏱️ Chế độ Kiểm tra' : '📖 Chế độ Luyện tập'}
+            </span>
             <span className="bg-slate-100 px-2.5 py-1 rounded-full font-semibold text-slate-700">
               {exercise.sentences.length} câu nghe
             </span>
             <span className="bg-slate-100 px-2.5 py-1 rounded-full font-semibold text-slate-700">
-              Giọng {exercise.voiceAccent} ({exercise.playbackSpeed}x)
+              {exercise.voiceMode === 'NATURAL'
+                ? '✨ Giọng Tự nhiên'
+                : exercise.voiceMode === 'UK' || exercise.voiceAccent === 'UK'
+                ? '🇬🇧 Anh-Anh'
+                : '🇺🇸 Anh-Mỹ'}{' '}
+              ({exercise.playbackSpeed || 0.9}x)
             </span>
             <span className="bg-slate-100 px-2.5 py-1 rounded-full font-semibold text-slate-700">
               {exercise.listenLimit === 0 ? 'Nghe tự do' : `Tối đa ${exercise.listenLimit} lượt/câu`}

@@ -9,9 +9,13 @@ An ultra-simple, modern, and privacy-first English Dictation web application des
 - **No Login / No Account**: Frictionless for students and teachers.
 - **No API Keys**: Fully operational out of the box with zero external subscription or API setup.
 - **No Gemini / No Firebase / No Express**: Clean, pure static build.
-- **Native Browser SpeechSynthesis**: Generates clear US/UK voice pronunciations offline using standard Web Speech API.
-- **Local JavaScript Answer Checking**: Word-level diff and accuracy calculation done locally in milliseconds.
-- **URL-Encoded Exercises**: Entire exercises (sentences, audio settings, check modes) are compressed and encoded directly into shareable URLs (`#/practice/ENCODED_DATA`) with `lz-string` and QR codes.
+- **Native Browser SpeechSynthesis**: Generates natural English audio and individual difficult word pronunciations offline using the Web Speech API.
+- **Local Learning Features**:
+  - **Retry Before Reveal**: Encourages second attempts before showing answers in Practice mode.
+  - **Progressive Hint Ladder**: Unlocks sentence word count and first-letter clues (`💡 GỢI Ý`).
+  - **Exercise Modes**: Practice mode (interactive with hints & retries) vs Test mode (continuous submission with review upon completion).
+  - **Remediation & Difficult Words**: Dedicated "Luyện lại câu sai" round and audio pronunciation playback for tricky words.
+- **URL-Encoded Exercises**: Entire exercises (sentences, audio settings, check modes, exercise mode) are compressed and encoded directly into shareable URLs (`#/practice/ENCODED_DATA`) with `lz-string` and QR codes.
 
 ## 🚀 GitHub Pages & Static Deployment
 

@@ -1,14 +1,23 @@
 import LZString from 'lz-string';
-import { DictationExercise } from '../types';
+import { DictationExercise, PlaybackSpeed, VoiceMode, VoicePitch } from '../types';
 
 interface MinifiedExercisePayload {
   t: string; // title
   s: string[]; // sentences
-  v?: 'US' | 'UK'; // voice
-  r?: number; // playback rate (0.75, 0.85, 1.0, 1.15)
+  em?: 'practice' | 'test'; // exercise mode ('practice' | 'test')
+  v?: 'US' | 'UK'; // fallback voice accent
+  vm?: VoiceMode; // voice mode ('NATURAL' | 'US' | 'UK' | 'CUSTOM')
+  vn?: string; // preferred voice name
+  vu?: string; // preferred voice URI
+  vl?: string; // preferred lang
+  p?: VoicePitch; // pitch (0.9, 1.0, 1.05, 1.1)
+  r?: number; // playback rate (0.75, 0.85, 0.9, 0.95, 1.0, 1.15)
   l?: number; // listen limit (0, 1, 2, 3)
   m?: 'EASY' | 'STRICT'; // checking mode
 }
+
+const VALID_SPEEDS: PlaybackSpeed[] = [0.75, 0.85, 0.9, 0.95, 1.0, 1.15];
+const VALID_PITCHES: VoicePitch[] = [0.9, 1.0, 1.05, 1.1];
 
 /**
  * Serializes and compresses a complete DictationExercise into a short URI-safe string.
@@ -17,8 +26,14 @@ export function encodeExercise(exercise: DictationExercise): string {
   const minified: MinifiedExercisePayload = {
     t: exercise.title.trim(),
     s: exercise.sentences.map((s) => s.text.trim()).filter(Boolean),
+    em: exercise.exerciseMode === 'TEST' ? 'test' : 'practice',
     v: exercise.voiceAccent || 'US',
-    r: exercise.playbackSpeed || 0.85,
+    vm: exercise.voiceMode || 'NATURAL',
+    vn: exercise.preferredVoiceName,
+    vu: exercise.preferredVoiceURI,
+    vl: exercise.preferredLang,
+    p: exercise.pitch ?? 1.0,
+    r: exercise.playbackSpeed || 0.95,
     l: exercise.listenLimit ?? 3,
     m: exercise.checkMode || 'EASY',
   };
@@ -57,8 +72,19 @@ export function decodeExercise(encodedStr: string): DictationExercise | null {
 function parsePayload(parsed: any): DictationExercise | null {
   if (!parsed) return null;
 
-  // Handle minified payload: { t, s, v, r, l, m }
+  // Handle minified payload: { t, s, em, v, vm, vn, vu, vl, p, r, l, m }
   if (typeof parsed.t === 'string' && Array.isArray(parsed.s)) {
+    const speed = VALID_SPEEDS.includes(parsed.r) ? parsed.r : 0.95;
+    const pitch = VALID_PITCHES.includes(parsed.p) ? parsed.p : 1.0;
+    const voiceMode: VoiceMode =
+      parsed.vm === 'NATURAL' || parsed.vm === 'US' || parsed.vm === 'UK' || parsed.vm === 'CUSTOM'
+        ? parsed.vm
+        : parsed.v === 'UK'
+        ? 'UK'
+        : 'NATURAL';
+
+    const exerciseMode = parsed.em === 'test' ? 'TEST' : 'PRACTICE';
+
     return {
       title: parsed.t || 'English Dictation',
       sentences: parsed.s.map((text: string, idx: number) => ({
@@ -66,14 +92,20 @@ function parsePayload(parsed: any): DictationExercise | null {
         order: idx + 1,
         text: String(text).trim(),
       })),
+      exerciseMode,
+      voiceMode,
       voiceAccent: parsed.v === 'UK' ? 'UK' : 'US',
-      playbackSpeed: (parsed.r === 0.75 || parsed.r === 0.85 || parsed.r === 1.0 || parsed.r === 1.15) ? parsed.r : 0.85,
+      preferredVoiceName: parsed.vn || undefined,
+      preferredVoiceURI: parsed.vu || undefined,
+      preferredLang: parsed.vl || undefined,
+      pitch,
+      playbackSpeed: speed,
       listenLimit: (parsed.l === 0 || parsed.l === 1 || parsed.l === 2 || parsed.l === 3) ? parsed.l : 3,
       checkMode: parsed.m === 'STRICT' ? 'STRICT' : 'EASY',
     };
   }
 
-  // Handle verbose payload: { title, sentences, voiceAccent, ... }
+  // Handle verbose payload: { title, sentences, exerciseMode, voiceAccent, ... }
   if (typeof parsed.title === 'string' && Array.isArray(parsed.sentences)) {
     return {
       title: parsed.title || 'English Dictation',
@@ -82,8 +114,14 @@ function parsePayload(parsed: any): DictationExercise | null {
         order: item.order || idx + 1,
         text: typeof item === 'string' ? item.trim() : (item.text || '').trim(),
       })),
+      exerciseMode: parsed.exerciseMode === 'TEST' ? 'TEST' : 'PRACTICE',
+      voiceMode: parsed.voiceMode || (parsed.voiceAccent === 'UK' ? 'UK' : 'NATURAL'),
       voiceAccent: parsed.voiceAccent === 'UK' ? 'UK' : 'US',
-      playbackSpeed: parsed.playbackSpeed || 0.85,
+      preferredVoiceName: parsed.preferredVoiceName,
+      preferredVoiceURI: parsed.preferredVoiceURI,
+      preferredLang: parsed.preferredLang,
+      pitch: VALID_PITCHES.includes(parsed.pitch) ? parsed.pitch : 1.0,
+      playbackSpeed: VALID_SPEEDS.includes(parsed.playbackSpeed) ? parsed.playbackSpeed : 0.95,
       listenLimit: parsed.listenLimit ?? 3,
       checkMode: parsed.checkMode === 'STRICT' ? 'STRICT' : 'EASY',
     };

@@ -11,14 +11,16 @@ import {
   Volume2,
   ArrowLeft,
   Sparkles,
+  Lightbulb,
 } from 'lucide-react';
-import { DictationExercise, SentenceSubmissionResult, PracticeSessionResult } from '../types';
+import { DictationExercise, SentenceSubmissionResult } from '../types';
 import { audioPlayer } from '../utils/audioPlayer';
 
 interface StudentResultViewProps {
   exercise: DictationExercise;
   studentName: string;
   sentenceResults: SentenceSubmissionResult[];
+  isRemediationRound?: boolean;
   onRetryIncorrect: (incorrectSentences: SentenceSubmissionResult[]) => void;
   onRestartAll: () => void;
   onBackToHome: () => void;
@@ -28,28 +30,31 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   exercise,
   studentName,
   sentenceResults,
+  isRemediationRound = false,
   onRetryIncorrect,
   onRestartAll,
   onBackToHome,
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // Compute Overall Score and Accuracy
+  // Compute Overall Score, Accuracy, and Hints Used
   const totalSentences = sentenceResults.length;
   const correctSentencesCount = sentenceResults.filter((r) => r.isCorrect).length;
 
   let totalAccuracySum = 0;
+  let totalHintsUsed = 0;
   const wrongWordsSet = new Set<string>();
 
   sentenceResults.forEach((res) => {
     totalAccuracySum += res.sentenceAccuracy;
+    totalHintsUsed += res.hintsUsed || 0;
     res.wordDiffs.forEach((wd) => {
       if (wd.type === 'incorrect' || wd.type === 'missing') {
         const word = (wd.correctWord || wd.studentWord || '')
           .toLowerCase()
           .replace(/[^a-z0-9']/g, '')
           .trim();
-        if (word.length > 0) {
+        if (word.length > 1) {
           wrongWordsSet.add(word);
         }
       }
@@ -62,9 +67,9 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   const wrongWords = Array.from(wrongWordsSet);
   const incorrectResults = sentenceResults.filter((r) => !r.isCorrect);
 
-  // Fire confetti on high score
+  // Fire confetti on high score or completed remediation
   useEffect(() => {
-    if (score >= 75) {
+    if (score >= 75 || (isRemediationRound && incorrectResults.length === 0)) {
       try {
         confetti({
           particleCount: 80,
@@ -73,17 +78,18 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
         });
       } catch {}
     }
-  }, [score]);
+  }, [score, isRemediationRound, incorrectResults.length]);
 
   // Generate standard text report for clipboard copy (Zalo/SMS friendly)
   const generateSummaryText = () => {
-    const wrongWordsList = wrongWords.length > 0 ? wrongWords.join(', ') : 'Không có (Làm đúng tất cả!)';
+    const wrongWordsList =
+      wrongWords.length > 0 ? wrongWords.join(', ') : 'Không có (Làm đúng 100%!)';
     return (
 `English Dictation
 Học sinh: ${studentName}
-Bài: ${exercise.title}
-Điểm: ${score}%
-Độ chính xác: ${overallAccuracy}% (${correctSentencesCount}/${totalSentences} câu đúng)
+Bài: ${exercise.title} (${exercise.exerciseMode === 'TEST' ? 'Kiểm tra' : 'Luyện tập'})
+Điểm chính xác: ${overallAccuracy}% (${correctSentencesCount}/${totalSentences} câu đúng)
+Gợi ý đã dùng: ${totalHintsUsed}
 Từ cần luyện: ${wrongWordsList}`
     );
   };
@@ -121,12 +127,20 @@ Từ cần luyện: ${wrongWordsList}`
           <span>Về trang chủ</span>
         </button>
         <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-          Kết quả bài làm
+          {isRemediationRound ? 'Luyện lại câu sai' : exercise.exerciseMode === 'TEST' ? 'Kết quả bài kiểm tra' : 'Kết quả bài luyện tập'}
         </span>
       </header>
 
       {/* Main Container */}
       <main className="w-full max-w-2xl mx-auto my-4 space-y-6">
+        {/* Remediation completion notice */}
+        {isRemediationRound && incorrectResults.length === 0 && (
+          <div className="p-4 rounded-2xl bg-emerald-500 text-white font-extrabold text-center shadow-sm text-sm sm:text-base flex items-center justify-center space-x-2 animate-in fade-in">
+            <Sparkles className="w-5 h-5" />
+            <span>Em đã luyện lại tất cả các câu cần cải thiện. ⭐</span>
+          </div>
+        )}
+
         {/* Core Result Banner Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 text-center space-y-5">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-amber-50 text-amber-500 mx-auto shadow-inner">
@@ -141,12 +155,12 @@ Từ cần luyện: ${wrongWordsList}`
               Học sinh: <span className="text-indigo-600">{studentName}</span>
             </p>
             <p className="text-xs text-slate-500 font-medium">
-              Bài: {exercise.title}
+              Bài: {exercise.title} {exercise.exerciseMode === 'TEST' ? '(Kiểm tra)' : '(Luyện tập)'}
             </p>
           </div>
 
           {/* Large Score Display */}
-          <div className="py-3">
+          <div className="py-2">
             <div className="inline-flex items-baseline justify-center space-x-1">
               <span id="final-score-value" className="text-5xl sm:text-7xl font-black text-indigo-600 tracking-tight">
                 {score}%
@@ -163,23 +177,33 @@ Từ cần luyện: ${wrongWordsList}`
             </p>
           </div>
 
-          {/* Mini Stats Grid */}
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-left">
+          {/* Clean 3-Stats Grid */}
+          <div className="grid grid-cols-3 gap-2.5 pt-3 border-t border-slate-100 text-left">
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Độ chính xác
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Điểm chính xác
               </span>
-              <span className="text-base sm:text-lg font-black text-slate-900">
+              <span className="text-sm sm:text-base font-black text-slate-900">
                 {overallAccuracy}%
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Số câu hoàn thành
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Số câu đúng
               </span>
-              <span className="text-base sm:text-lg font-black text-slate-900">
-                {correctSentencesCount} / {totalSentences} câu đúng
+              <span className="text-sm sm:text-base font-black text-slate-900">
+                {correctSentencesCount} / {totalSentences}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block flex items-center gap-1">
+                <Lightbulb className="w-3 h-3 text-amber-500" />
+                Gợi ý đã dùng
+              </span>
+              <span className="text-sm sm:text-base font-black text-amber-700">
+                {totalHintsUsed}
               </span>
             </div>
           </div>
@@ -211,11 +235,16 @@ Từ cần luyện: ${wrongWordsList}`
                     onClick={() =>
                       audioPlayer.play({
                         text: word,
+                        voiceMode: exercise.voiceMode,
+                        preferredVoiceName: exercise.preferredVoiceName,
+                        preferredVoiceURI: exercise.preferredVoiceURI,
+                        preferredLang: exercise.preferredLang,
                         accent: exercise.voiceAccent,
                         speed: 0.85,
+                        pitch: exercise.pitch ?? 1.0,
                       })
                     }
-                    className="hover:text-rose-900 cursor-pointer"
+                    className="hover:text-rose-900 p-0.5 rounded hover:bg-rose-100 transition-colors cursor-pointer"
                   >
                     <Volume2 className="w-3.5 h-3.5" />
                   </button>
@@ -247,13 +276,20 @@ Từ cần luyện: ${wrongWordsList}`
                   <span className={res.isCorrect ? 'text-slate-700' : 'text-rose-700'}>
                     Câu {res.sentenceOrder}
                   </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full ${
-                      res.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}
-                  >
-                    {res.isCorrect ? '✓ Đúng 100%' : `${res.sentenceAccuracy}%`}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    {res.hintsUsed && res.hintsUsed > 0 ? (
+                      <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md font-semibold">
+                        💡 {res.hintsUsed} gợi ý
+                      </span>
+                    ) : null}
+                    <span
+                      className={`px-2 py-0.5 rounded-full ${
+                        res.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {res.isCorrect ? '✓ Đúng' : `${res.sentenceAccuracy}%`}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm font-semibold text-slate-900">{res.targetSentence}</p>
                 {!res.isCorrect && (
@@ -266,7 +302,7 @@ Từ cần luyện: ${wrongWordsList}`
           </div>
         </div>
 
-        {/* Required 3 Bottom Action Buttons */}
+        {/* Action Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
           {incorrectResults.length > 0 && (
             <button

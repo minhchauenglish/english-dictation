@@ -12,7 +12,13 @@ const STORAGE_KEYS = {
 export interface TeacherDraft {
   title: string;
   passage: string;
-  voiceAccent: 'US' | 'UK';
+  exerciseMode?: 'PRACTICE' | 'TEST';
+  voiceMode?: 'NATURAL' | 'US' | 'UK' | 'CUSTOM';
+  voiceAccent?: 'US' | 'UK';
+  preferredVoiceName?: string;
+  preferredVoiceURI?: string;
+  preferredLang?: string;
+  pitch?: number;
   playbackSpeed: number;
   listenLimit: number;
   checkMode: 'EASY' | 'STRICT';

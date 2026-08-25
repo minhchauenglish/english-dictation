@@ -21,6 +21,7 @@ export function App() {
   const [activeExercise, setActiveExercise] = useState<DictationExercise | null>(null);
   const [studentName, setStudentName] = useState<string>('');
   const [completedResults, setCompletedResults] = useState<SentenceSubmissionResult[]>([]);
+  const [isRemediationRound, setIsRemediationRound] = useState<boolean>(false);
 
   // Modals
   const [shareModalExercise, setShareModalExercise] = useState<DictationExercise | null>(null);
@@ -33,6 +34,7 @@ export function App() {
       const decoded = decodeExercise(encoded);
       if (decoded && decoded.sentences.length > 0) {
         setActiveExercise(decoded);
+        setIsRemediationRound(false);
         setView('student_start');
         return true;
       }
@@ -64,6 +66,7 @@ export function App() {
   // Handler: Student practice initiation from sample or direct link
   const handleStartPracticeWithExercise = (exercise: DictationExercise) => {
     setActiveExercise(exercise);
+    setIsRemediationRound(false);
     setView('student_start');
   };
 
@@ -98,12 +101,14 @@ export function App() {
       })),
     };
 
+    setIsRemediationRound(true);
     setActiveExercise(retryExercise);
     setView('student_practice');
   };
 
   // Handler: Restart entire exercise
   const handleRestartAll = () => {
+    setIsRemediationRound(false);
     setView('student_practice');
   };
 
@@ -111,6 +116,7 @@ export function App() {
   const handleBackToHome = () => {
     window.location.hash = '';
     setActiveExercise(null);
+    setIsRemediationRound(false);
     setView('home');
   };
 
@@ -158,6 +164,7 @@ export function App() {
           exercise={activeExercise}
           studentName={studentName}
           sentenceResults={completedResults}
+          isRemediationRound={isRemediationRound}
           onRetryIncorrect={handleRetryIncorrect}
           onRestartAll={handleRestartAll}
           onBackToHome={handleBackToHome}

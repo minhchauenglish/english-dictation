@@ -18,10 +18,12 @@ export const SAMPLE_EXERCISES: DictationExercise[] = [
       { id: 's4', order: 4, text: 'I like English very much.' },
       { id: 's5', order: 5, text: 'I do my homework in the evening.' },
     ],
+    voiceMode: 'NATURAL',
     voiceAccent: 'US',
-    playbackSpeed: 0.85,
+    playbackSpeed: 0.95,
     listenLimit: 3,
     checkMode: 'EASY',
+    exerciseMode: 'PRACTICE',
   },
   {
     title: 'My Cute Pets & Animals',
@@ -31,10 +33,12 @@ export const SAMPLE_EXERCISES: DictationExercise[] = [
       { id: 'p3', order: 3, text: 'We play with a small yellow ball.' },
       { id: 'p4', order: 4, text: 'My dog sleeps under the chair.' },
     ],
+    voiceMode: 'UK',
     voiceAccent: 'UK',
-    playbackSpeed: 0.85,
+    playbackSpeed: 0.95,
     listenLimit: 3,
     checkMode: 'EASY',
+    exerciseMode: 'PRACTICE',
   },
 ];
 
