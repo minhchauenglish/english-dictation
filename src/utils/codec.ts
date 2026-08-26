@@ -131,16 +131,18 @@ function parsePayload(parsed: any): DictationExercise | null {
 }
 
 /**
+ * Canonical GitHub Pages base URL for students.
+ * All student links generated across the app strictly use this URL.
+ */
+export const GITHUB_PAGES_BASE_URL = 'https://minhchauenglish.github.io/english-dictation/';
+
+/**
  * Builds the full shareable URL containing the encoded exercise in the hash.
- * Preserves the exact host and repository subfolder path (e.g. https://username.github.io/english-dictation/)
+ * Output format: https://minhchauenglish.github.io/english-dictation/#/practice/<encoded>
  */
 export function buildShareUrl(exercise: DictationExercise): string {
   const encoded = encodeExercise(exercise);
-  if (typeof window === 'undefined') return `#/practice/${encoded}`;
-
-  // Preserve the full path while stripping existing hash and query parameters
-  const currentUrl = window.location.href.split('#')[0].split('?')[0];
-  return `${currentUrl}#/practice/${encoded}`;
+  return `${GITHUB_PAGES_BASE_URL}#/practice/${encoded}`;
 }
 
 /**
@@ -151,13 +153,13 @@ export function getEncodedExerciseFromLocation(): string | null {
   const hash = window.location.hash || '';
   if (!hash) return null;
 
-  // Match #/practice/<encoded> or #practice/<encoded>
-  const practicePrefixMatch = hash.match(/#\/?practice\/(.+)$/);
+  // Match #/practice/<encoded> or #practice/<encoded> with optional query params
+  const practicePrefixMatch = hash.match(/#\/?practice\/([^?&]+)/);
   if (practicePrefixMatch && practicePrefixMatch[1]) {
-    return practicePrefixMatch[1].split('?')[0].trim();
+    return practicePrefixMatch[1].trim();
   }
 
-  // Fallback match #<encoded>
+  // Fallback match #<encoded> (excluding internal routes)
   const rawMatch = hash.replace(/^#\/?/, '').split('?')[0].trim();
   if (rawMatch && rawMatch !== 'practice' && !rawMatch.startsWith('practice/')) {
     return rawMatch;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DictationExercise, SentenceSubmissionResult } from './types';
 import { decodeExercise, getEncodedExerciseFromLocation } from './utils/codec';
 import { HomeView } from './components/HomeView';
-import { TeacherCreateView } from './components/TeacherCreateView';
+import { TeacherDashboardView } from './components/TeacherDashboard/TeacherDashboardView';
 import { ShareModal } from './components/ShareModal';
 import { DirectLinkModal } from './components/DirectLinkModal';
 import { StudentStartView } from './components/StudentStartView';
@@ -11,7 +11,7 @@ import { StudentResultView } from './components/StudentResultView';
 
 type AppView =
   | 'home'
-  | 'teacher_create'
+  | 'teacher_dashboard'
   | 'student_start'
   | 'student_practice'
   | 'student_result';
@@ -53,17 +53,17 @@ export function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [checkHashForExercise]);
 
-  // Handler: Start creating a new dictation
-  const handleStartCreate = () => {
-    setView('teacher_create');
+  // Handler: Open Teacher Dashboard
+  const handleOpenTeacherDashboard = () => {
+    setView('teacher_dashboard');
   };
 
-  // Handler: Generate link from teacher view
+  // Handler: Generate link from teacher view (legacy direct share / QR)
   const handleGenerateShareLink = (exercise: DictationExercise) => {
     setShareModalExercise(exercise);
   };
 
-  // Handler: Student practice initiation from sample or direct link
+  // Handler: Student practice initiation from sample, library or direct link
   const handleStartPracticeWithExercise = (exercise: DictationExercise) => {
     setActiveExercise(exercise);
     setIsRemediationRound(false);
@@ -125,16 +125,18 @@ export function App() {
       {/* 1. HOMEPAGE */}
       {view === 'home' && (
         <HomeView
-          onStartCreate={handleStartCreate}
+          onStartCreate={handleOpenTeacherDashboard}
+          onOpenTeacherDashboard={handleOpenTeacherDashboard}
           onOpenPracticeWithExercise={handleStartPracticeWithExercise}
           onOpenLinkModal={() => setIsDirectLinkModalOpen(true)}
         />
       )}
 
-      {/* 2. TEACHER CREATE SCREEN */}
-      {view === 'teacher_create' && (
-        <TeacherCreateView
+      {/* 2. TEACHER DASHBOARD (Library, Create, Classes, History) */}
+      {view === 'teacher_dashboard' && (
+        <TeacherDashboardView
           onBackToHome={handleBackToHome}
+          onPreviewExercise={handleStartPracticeWithExercise}
           onGenerateShareLink={handleGenerateShareLink}
         />
       )}

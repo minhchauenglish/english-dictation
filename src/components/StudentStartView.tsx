@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Headphones, ArrowRight, ArrowLeft, Volume2, Sparkles, ShieldCheck } from 'lucide-react';
+import { User, Headphones, ArrowRight, ArrowLeft, Volume2, Sparkles, ShieldCheck, Users } from 'lucide-react';
 import { DictationExercise } from '../types';
 import { clientStorage } from '../utils/storage';
 
@@ -15,11 +15,25 @@ export const StudentStartView: React.FC<StudentStartViewProps> = ({
   onBackToHome,
 }) => {
   const [name, setName] = useState('');
+  const [classNameTag, setClassNameTag] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     const saved = clientStorage.getStudentName();
     if (saved) setName(saved);
+
+    try {
+      let c = new URLSearchParams(window.location.search).get('c') || new URLSearchParams(window.location.search).get('class');
+      if (!c && window.location.hash.includes('?')) {
+        const hashQuery = window.location.hash.split('?')[1];
+        c = new URLSearchParams(hashQuery).get('c') || new URLSearchParams(hashQuery).get('class');
+      }
+      if (c) {
+        setClassNameTag(decodeURIComponent(c));
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -56,8 +70,15 @@ export const StudentStartView: React.FC<StudentStartViewProps> = ({
           <Headphones className="w-8 h-8" />
         </div>
 
-        {/* Title */}
+        {/* Title & Class tag */}
         <div className="space-y-2">
+          {classNameTag && (
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 font-extrabold text-xs border border-indigo-100 mb-1">
+              <Users className="w-3.5 h-3.5" />
+              <span>Dành cho lớp: {classNameTag}</span>
+            </div>
+          )}
+
           <h2 id="student-exercise-title" className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
             {exercise.title}
           </h2>
@@ -74,7 +95,7 @@ export const StudentStartView: React.FC<StudentStartViewProps> = ({
                 : exercise.voiceMode === 'UK' || exercise.voiceAccent === 'UK'
                 ? '🇬🇧 Anh-Anh'
                 : '🇺🇸 Anh-Mỹ'}{' '}
-              ({exercise.playbackSpeed || 0.9}x)
+              ({exercise.playbackSpeed || 0.95}x)
             </span>
             <span className="bg-slate-100 px-2.5 py-1 rounded-full font-semibold text-slate-700">
               {exercise.listenLimit === 0 ? 'Nghe tự do' : `Tối đa ${exercise.listenLimit} lượt/câu`}

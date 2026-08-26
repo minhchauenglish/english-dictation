@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Headphones, PenTool, Sparkles, ArrowRight, Play, Link as LinkIcon } from 'lucide-react';
+import { Headphones, PenTool, Sparkles, ArrowRight, Play, BookOpen, Users, Clock } from 'lucide-react';
 import { DictationExercise } from '../types';
+import { clientStorage } from '../utils/storage';
 
 interface HomeViewProps {
   onStartCreate: () => void;
+  onOpenTeacherDashboard: () => void;
   onOpenPracticeWithExercise: (exercise: DictationExercise) => void;
   onOpenLinkModal: () => void;
 }
@@ -44,6 +46,7 @@ export const SAMPLE_EXERCISES: DictationExercise[] = [
 
 export const HomeView: React.FC<HomeViewProps> = ({
   onStartCreate,
+  onOpenTeacherDashboard,
   onOpenPracticeWithExercise,
   onOpenLinkModal,
 }) => {
@@ -61,9 +64,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
             English Dictation
           </span>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200/60">
-          100% Client-Side
-        </span>
+        <button
+          type="button"
+          onClick={onOpenTeacherDashboard}
+          className="text-xs font-bold px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl border border-indigo-200 transition-colors flex items-center space-x-1.5 cursor-pointer"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Khu vực Giáo viên</span>
+        </button>
       </header>
 
       {/* Hero Core */}
@@ -89,16 +97,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
             className="w-full min-h-[58px] py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-lg sm:text-xl shadow-md hover:shadow-lg transition-all active:scale-[0.99] flex items-center justify-center space-x-3 cursor-pointer"
           >
             <Headphones className="w-6 h-6 shrink-0" />
-            <span>🎧 LÀM BÀI</span>
+            <span>🎧 LÀM BÀI (HỌC SINH)</span>
           </button>
 
           <button
-            id="btn-home-create"
-            onClick={onStartCreate}
+            id="btn-home-teacher-dashboard"
+            onClick={onOpenTeacherDashboard}
             className="w-full min-h-[58px] py-4 px-6 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 hover:border-slate-400 font-bold text-lg sm:text-xl shadow-sm transition-all active:scale-[0.99] flex items-center justify-center space-x-3 cursor-pointer"
           >
             <PenTool className="w-6 h-6 text-indigo-600 shrink-0" />
-            <span>👩‍🏫 TẠO BÀI DICTATION</span>
+            <span>👩‍🏫 DÀNH CHO GIÁO VIÊN</span>
           </button>
         </div>
 
@@ -140,7 +148,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       {/* Footer */}
       <footer id="home-footer" className="w-full py-4 text-center text-xs text-slate-500">
-        Hoạt động hoàn toàn trên trình duyệt • Không lưu trữ trên máy chủ • Không cần tài khoản
+        Hoạt động 100% trên trình duyệt • Không lưu trữ trên máy chủ • Không cần tài khoản
       </footer>
     </div>
   );

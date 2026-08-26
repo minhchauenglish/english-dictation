@@ -1,6 +1,8 @@
 {
   "name": "English Dictation",
-  "description": "An ultra-simple, 100% client-side English dictation app with instant URL encoding, offline speech synthesis, and smart word comparison.",
+  "description": "An ultra-simple, 100% client-side English dictation app with Daily Homework Manager for multi-class assignment, instant URL encoding, offline speech synthesis, and smart word comparison.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

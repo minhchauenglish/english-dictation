@@ -13,6 +13,10 @@ import {
   Play,
   Square,
   Settings2,
+  Save,
+  Send,
+  Check,
+  BookOpen,
 } from 'lucide-react';
 import {
   DictationExercise,
@@ -24,6 +28,7 @@ import {
   PlaybackSpeed,
   CheckMode,
   ListenLimit,
+  SavedDictationItem,
 } from '../types';
 import { splitPassageIntoSentences } from '../utils/textComparison';
 import {
@@ -38,6 +43,10 @@ import { clientStorage } from '../utils/storage';
 interface TeacherCreateViewProps {
   onBackToHome: () => void;
   onGenerateShareLink: (exercise: DictationExercise) => void;
+  onOpenHomeworkModal?: (exercise: DictationExercise, classLevel?: string, topic?: string) => void;
+  onSavedToLibrary?: (savedItem: SavedDictationItem) => void;
+  editingItem?: SavedDictationItem | null;
+  onCancelEdit?: () => void;
 }
 
 const SPEED_OPTIONS: { value: PlaybackSpeed; label: string; desc: string }[] = [
@@ -59,8 +68,14 @@ const PITCH_OPTIONS: { value: VoicePitch; label: string; desc: string }[] = [
 export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
   onBackToHome,
   onGenerateShareLink,
+  onOpenHomeworkModal,
+  onSavedToLibrary,
+  editingItem,
+  onCancelEdit,
 }) => {
   const [title, setTitle] = useState('');
+  const [classLevel, setClassLevel] = useState('');
+  const [topic, setTopic] = useState('');
   const [rawPassage, setRawPassage] = useState('');
   const [sentences, setSentences] = useState<DictationSentence[]>([]);
   const [exerciseMode, setExerciseMode] = useState<ExerciseMode>('PRACTICE');
@@ -77,6 +92,7 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [isPlayingVoiceSample, setIsPlayingVoiceSample] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [saveSuccessToast, setSaveSuccessToast] = useState('');
 
   // Subscribe to voices list
   useEffect(() => {
@@ -87,24 +103,58 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
     return unsubscribe;
   }, []);
 
-  // Load draft on mount
+  // Load from editingItem or draft on mount / editingItem change
   useEffect(() => {
-    const draft = clientStorage.getTeacherDraft();
-    if (draft) {
-      setTitle(draft.title || '');
-      setRawPassage(draft.passage || '');
-      if (draft.exerciseMode) setExerciseMode(draft.exerciseMode);
-      if (draft.voiceMode) setVoiceMode(draft.voiceMode);
-      if (draft.preferredVoiceName) setPreferredVoiceName(draft.preferredVoiceName);
-      if (draft.preferredVoiceURI) setPreferredVoiceURI(draft.preferredVoiceURI);
-      if (draft.preferredLang) setPreferredLang(draft.preferredLang);
-      if (draft.pitch !== undefined) setPitch(draft.pitch as VoicePitch);
-      if (draft.playbackSpeed) setPlaybackSpeed(draft.playbackSpeed as PlaybackSpeed);
-      if (draft.listenLimit !== undefined) setListenLimit(draft.listenLimit as ListenLimit);
-      if (draft.checkMode) setCheckMode(draft.checkMode);
+    if (editingItem) {
+      setTitle(editingItem.title || '');
+      setClassLevel(editingItem.classLevel || '');
+      setTopic(editingItem.topic || '');
+      setRawPassage(editingItem.passage || '');
+      setSentences(editingItem.exercise.sentences || []);
+      setExerciseMode(editingItem.exercise.exerciseMode || 'PRACTICE');
+      setVoiceMode(editingItem.exercise.voiceMode || 'NATURAL');
+      setPreferredVoiceName(editingItem.exercise.preferredVoiceName || '');
+      setPreferredVoiceURI(editingItem.exercise.preferredVoiceURI || '');
+      setPreferredLang(editingItem.exercise.preferredLang || '');
+      setPitch(editingItem.exercise.pitch || 1.0);
+      setPlaybackSpeed(editingItem.exercise.playbackSpeed || 0.95);
+      setListenLimit(editingItem.exercise.listenLimit ?? 3);
+      setCheckMode(editingItem.exercise.checkMode || 'EASY');
+    } else {
+      const draft = clientStorage.getTeacherDraft();
+      if (draft) {
+        setTitle(draft.title || '');
+        setClassLevel(draft.classLevel || '');
+        setTopic(draft.topic || '');
+        setRawPassage(draft.passage || '');
+        if (draft.exerciseMode) setExerciseMode(draft.exerciseMode);
+        if (draft.voiceMode) setVoiceMode(draft.voiceMode);
+        if (draft.preferredVoiceName) setPreferredVoiceName(draft.preferredVoiceName);
+        if (draft.preferredVoiceURI) setPreferredVoiceURI(draft.preferredVoiceURI);
+        if (draft.preferredLang) setPreferredLang(draft.preferredLang);
+        if (draft.pitch !== undefined) setPitch(draft.pitch as VoicePitch);
+        if (draft.playbackSpeed) setPlaybackSpeed(draft.playbackSpeed as PlaybackSpeed);
+        if (draft.listenLimit !== undefined) setListenLimit(draft.listenLimit as ListenLimit);
+        if (draft.checkMode) setCheckMode(draft.checkMode);
 
-      if (draft.passage) {
-        const split = splitPassageIntoSentences(draft.passage);
+        if (draft.passage) {
+          const split = splitPassageIntoSentences(draft.passage);
+          setSentences(
+            split.map((text, idx) => ({
+              id: `s_${Date.now()}_${idx}`,
+              order: idx + 1,
+              text,
+            }))
+          );
+        }
+      } else {
+        const defaultExample =
+          "I get up at six o'clock every morning.\nI have breakfast with my family.\nI go to school by bus.\nI like English very much.\nI do my homework in the evening.";
+        setTitle('Daily Routines');
+        setClassLevel('Grade 3');
+        setTopic('Unit 2: My Daily Life');
+        setRawPassage(defaultExample);
+        const split = splitPassageIntoSentences(defaultExample);
         setSentences(
           split.map((text, idx) => ({
             id: `s_${Date.now()}_${idx}`,
@@ -113,41 +163,34 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
           }))
         );
       }
-    } else {
-      // Default sample in input to help teacher test immediately
-      const defaultExample =
-        "I get up at six o'clock every morning.\nI have breakfast with my family.\nI go to school by bus.\nI like English very much.\nI do my homework in the evening.";
-      setTitle('Daily Routines');
-      setRawPassage(defaultExample);
-      const split = splitPassageIntoSentences(defaultExample);
-      setSentences(
-        split.map((text, idx) => ({
-          id: `s_${Date.now()}_${idx}`,
-          order: idx + 1,
-          text,
-        }))
-      );
     }
-  }, []);
+  }, [editingItem]);
 
-  // Save draft whenever state changes
+  // Save draft whenever state changes (if not editing an item)
   useEffect(() => {
-    clientStorage.setTeacherDraft({
-      title,
-      passage: rawPassage,
-      exerciseMode,
-      voiceMode,
-      voiceAccent: voiceMode === 'UK' ? 'UK' : 'US',
-      preferredVoiceName,
-      preferredVoiceURI,
-      preferredLang,
-      pitch,
-      playbackSpeed,
-      listenLimit,
-      checkMode,
-    });
+    if (!editingItem) {
+      clientStorage.setTeacherDraft({
+        title,
+        classLevel,
+        topic,
+        passage: rawPassage,
+        exerciseMode,
+        voiceMode,
+        voiceAccent: voiceMode === 'UK' ? 'UK' : 'US',
+        preferredVoiceName,
+        preferredVoiceURI,
+        preferredLang,
+        pitch,
+        playbackSpeed,
+        listenLimit,
+        checkMode,
+      });
+    }
   }, [
+    editingItem,
     title,
+    classLevel,
+    topic,
     rawPassage,
     exerciseMode,
     voiceMode,
@@ -279,7 +322,7 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
     setPlayingIndex(index);
 
     audioPlayer.play({
-      text,
+      text: text.trim(),
       voiceMode,
       preferredVoiceName: voiceMode === 'CUSTOM' ? preferredVoiceName : undefined,
       preferredVoiceURI: voiceMode === 'CUSTOM' ? preferredVoiceURI : undefined,
@@ -293,90 +336,96 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
     });
   };
 
-  // Handle Custom Voice Selection
-  const handleCustomVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const uri = e.target.value;
-    const selected = availableVoices.find((v) => v.voiceURI === uri);
-    if (selected) {
-      setPreferredVoiceURI(selected.voiceURI);
-      setPreferredVoiceName(selected.name);
-      setPreferredLang(selected.lang);
-    }
-  };
-
-  // Resolved active voice name for display
-  const resolvedVoice = resolveVoice({
-    voiceMode,
-    preferredVoiceName: voiceMode === 'CUSTOM' ? preferredVoiceName : undefined,
-    preferredVoiceURI: voiceMode === 'CUSTOM' ? preferredVoiceURI : undefined,
-    preferredLang: voiceMode === 'CUSTOM' ? preferredLang : undefined,
-    accent: voiceMode === 'UK' ? 'UK' : 'US',
-  });
-
-  // Generate Exercise Link
-  const handleGenerate = () => {
+  // Build validated exercise object
+  const buildExerciseObject = (): DictationExercise | null => {
     setErrorMessage('');
-    const cleanTitle = title.trim() || 'English Dictation';
     const validSentences = sentences
       .map((s) => ({ ...s, text: s.text.trim() }))
       .filter((s) => s.text.length > 0);
 
     if (validSentences.length === 0) {
-      setErrorMessage('Bài tập cần có ít nhất 1 câu hoàn chỉnh.');
-      return;
+      setErrorMessage('Bài tập cần có ít nhất 1 câu tiếng Anh hợp lệ.');
+      return null;
     }
 
-    const exercise: DictationExercise = {
-      title: cleanTitle,
-      sentences: validSentences.map((s, idx) => ({
-        id: s.id,
-        order: idx + 1,
-        text: s.text,
-      })),
+    return {
+      title: title.trim() || 'English Dictation Practice',
+      sentences: validSentences.map((s, idx) => ({ ...s, order: idx + 1 })),
       exerciseMode,
       voiceMode,
       voiceAccent: voiceMode === 'UK' ? 'UK' : 'US',
-      preferredVoiceName: voiceMode === 'CUSTOM' ? (preferredVoiceName || resolvedVoice?.name) : undefined,
-      preferredVoiceURI: voiceMode === 'CUSTOM' ? (preferredVoiceURI || resolvedVoice?.voiceURI) : undefined,
-      preferredLang: voiceMode === 'CUSTOM' ? (preferredLang || resolvedVoice?.lang) : undefined,
+      preferredVoiceName: voiceMode === 'CUSTOM' ? preferredVoiceName : undefined,
+      preferredVoiceURI: voiceMode === 'CUSTOM' ? preferredVoiceURI : undefined,
+      preferredLang: voiceMode === 'CUSTOM' ? preferredLang : undefined,
       pitch,
       playbackSpeed,
       listenLimit,
       checkMode,
       createdAt: new Date().toISOString(),
     };
+  };
 
-    onGenerateShareLink(exercise);
+  // Action: Save to Library
+  const handleSaveToLibrary = () => {
+    const ex = buildExerciseObject();
+    if (!ex) return;
+
+    const saved = clientStorage.saveDictation({
+      id: editingItem?.id,
+      title: ex.title,
+      classLevel: classLevel.trim() || 'Toàn trường',
+      topic: topic.trim() || 'Luyện nghe phản xạ',
+      passage: rawPassage.trim() || sentences.map((s) => s.text).join('\n'),
+      exercise: ex,
+    });
+
+    setSaveSuccessToast('Đã lưu bài vào Thư viện thành công!');
+    setTimeout(() => setSaveSuccessToast(''), 3000);
+
+    if (onSavedToLibrary) {
+      onSavedToLibrary(saved);
+    }
+  };
+
+  // Action: Generate Homework for Classes
+  const handleOpenHomework = () => {
+    const ex = buildExerciseObject();
+    if (!ex) return;
+
+    if (onOpenHomeworkModal) {
+      onOpenHomeworkModal(ex, classLevel, topic);
+    } else {
+      onGenerateShareLink(ex);
+    }
+  };
+
+  // Action: Legacy Direct Link
+  const handleGenerateLink = () => {
+    const ex = buildExerciseObject();
+    if (!ex) return;
+    onGenerateShareLink(ex);
   };
 
   return (
-    <div id="teacher-create-view" className="min-h-screen bg-slate-50 text-slate-800 pb-16">
-      {/* Header Bar */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            id="btn-back-home"
-            onClick={onBackToHome}
-            className="flex items-center space-x-2 text-slate-600 hover:text-slate-900 font-semibold text-sm px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Trang chủ</span>
-          </button>
-          <div className="text-center">
-            <h1 className="font-extrabold text-slate-900 text-base sm:text-lg">Tạo bài Dictation mới</h1>
-            <p className="text-xs text-slate-500">Mã hóa bài tập trực tiếp vào link</p>
+    <div id="teacher-create-view" className="min-h-screen bg-slate-100/60 pb-20">
+      {/* Top Banner if Editing */}
+      {editingItem && (
+        <div className="bg-amber-500 text-white px-4 py-2.5 text-xs font-bold flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-4 h-4" />
+            <span>Đang chỉnh sửa bài tập: "{editingItem.title}"</span>
           </div>
-          <button
-            id="btn-create-share-top"
-            onClick={handleGenerate}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <LinkIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">TẠO LINK BÀI TẬP</span>
-            <span className="sm:hidden">Tạo Link</span>
-          </button>
+          {onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="px-2.5 py-1 bg-white text-amber-900 rounded-lg text-xs font-black hover:bg-amber-50 cursor-pointer"
+            >
+              Hủy sửa & Về thư viện
+            </button>
+          )}
         </div>
-      </header>
+      )}
 
       {/* Main Container */}
       <main className="max-w-3xl mx-auto px-4 pt-6 space-y-6">
@@ -387,28 +436,65 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
           </div>
         )}
 
-        {/* Card 1: Title & Raw Passage */}
-        <section className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Tên bài
-            </label>
-            <input
-              id="input-exercise-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ví dụ: Daily Routines, Unit 1 Vocabulary..."
-              className="w-full px-4 py-3 text-base rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
-            />
+        {saveSuccessToast && (
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center space-x-2.5 animate-in fade-in">
+            <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+            <span>{saveSuccessToast}</span>
+          </div>
+        )}
+
+        {/* Card 1: Title, Level, Topic & Raw Passage */}
+        <section className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-3">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Tên bài tập (Title) *
+              </label>
+              <input
+                id="input-exercise-title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ví dụ: Daily Routines, Animals and Pets..."
+                className="w-full px-4 py-3 text-base rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-900"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Khối lớp (Class Level)
+              </label>
+              <input
+                id="input-exercise-level"
+                type="text"
+                value={classLevel}
+                onChange={(e) => setClassLevel(e.target.value)}
+                placeholder="Ví dụ: Grade 3, KID 1..."
+                className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Chủ đề / Unit (Topic)
+              </label>
+              <input
+                id="input-exercise-topic"
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Ví dụ: Unit 4: My Family, Hobbies & Sports..."
+                className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800"
+              />
+            </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Nội dung Dictation
+                Nội dung Dictation tiếng Anh *
               </label>
-              <span className="text-xs text-slate-400">Dán cả đoạn hoặc từng dòng</span>
+              <span className="text-xs text-slate-400">Dán cả đoạn hoặc từng câu</span>
             </div>
             <textarea
               id="textarea-passage"
@@ -416,23 +502,24 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
               value={rawPassage}
               onChange={(e) => setRawPassage(e.target.value)}
               placeholder="Dán nội dung tiếng Anh vào đây..."
-              className="w-full px-4 py-3 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-normal leading-relaxed"
+              className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-normal leading-relaxed text-slate-800"
             />
           </div>
 
           <button
             id="btn-split-sentences"
+            type="button"
             onClick={handleSplitPassage}
-            className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            className="w-full min-h-[46px] py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer"
           >
             <Scissors className="w-4 h-4" />
-            <span>TÁCH THÀNH CÂU</span>
+            <span>TÁCH THÀNH CÂU TIẾNG ANH</span>
           </button>
         </section>
 
         {/* Card 2: Sentences List */}
         {sentences.length > 0 && (
-          <section className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+          <section className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
@@ -441,8 +528,9 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
               </div>
               <button
                 id="btn-add-sentence"
+                type="button"
                 onClick={handleAddSentence}
-                className="inline-flex items-center space-x-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center space-x-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Thêm câu</span>
@@ -454,52 +542,65 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
                 <div
                   key={sent.id || idx}
                   id={`sentence-card-${idx}`}
-                  className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors space-y-2"
+                  className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-800 shrink-0">
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 shrink-0">
                       Câu {idx + 1}
                     </span>
 
                     {/* Action buttons */}
                     <div className="flex items-center space-x-1">
                       <button
+                        type="button"
                         title="Nghe thử câu này"
                         onClick={() => handlePreviewAudio(sent.text, idx)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer ${
                           playingIndex === idx
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
                         }`}
                       >
-                        <Volume2 className={`w-3.5 h-3.5 ${playingIndex === idx ? 'animate-bounce' : ''}`} />
-                        <span>{playingIndex === idx ? 'Đang đọc...' : 'NGHE THỬ'}</span>
+                        {playingIndex === idx ? (
+                          <>
+                            <Square className="w-3 h-3 fill-current" />
+                            <span>Dừng</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Nghe thử</span>
+                          </>
+                        )}
                       </button>
 
                       <button
+                        type="button"
                         title="Di chuyển lên"
                         disabled={idx === 0}
                         onClick={() => handleMoveUp(idx)}
-                        className="w-7 h-7 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 border border-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
                       >
-                        <ChevronUp className="w-3.5 h-3.5" />
+                        <ChevronUp className="w-4 h-4" />
                       </button>
 
                       <button
+                        type="button"
                         title="Di chuyển xuống"
                         disabled={idx === sentences.length - 1}
                         onClick={() => handleMoveDown(idx)}
-                        className="w-7 h-7 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 border border-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30 cursor-pointer"
                       >
-                        <ChevronDown className="w-3.5 h-3.5" />
+                        <ChevronDown className="w-4 h-4" />
                       </button>
 
                       <button
+                        type="button"
                         title="Xóa câu"
                         onClick={() => handleDeleteSentence(idx)}
-                        className="w-7 h-7 rounded-lg bg-white hover:bg-rose-100 border border-slate-200 flex items-center justify-center text-rose-600 cursor-pointer"
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-100 transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -508,8 +609,8 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
                     type="text"
                     value={sent.text}
                     onChange={(e) => handleSentenceChange(idx, e.target.value)}
-                    placeholder="Nội dung câu..."
-                    className="w-full px-3 py-2 text-sm rounded-lg bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
+                    placeholder="Nhập nội dung câu tiếng Anh..."
                   />
                 </div>
               ))}
@@ -517,64 +618,59 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
           </section>
         )}
 
-        {/* Card 3: Audio & Voice Customization (Upgraded) */}
-        <section className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-6">
+        {/* Card 3: Audio Settings */}
+        <section className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center space-x-2">
-              <Settings2 className="w-4 h-4 text-indigo-600" />
-              <span>Chất giọng & Tùy chọn đọc</span>
-            </h3>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              100% Miễn phí • Browser Native
-            </span>
-          </div>
-
-          {/* Section: Chất giọng */}
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Chất giọng:
-              </label>
-
-              {/* Preview Button beside / right aligned */}
-              <button
-                type="button"
-                id="btn-preview-voice-sample"
-                onClick={handlePreviewVoiceSample}
-                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  isPlayingVoiceSample
-                    ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200'
-                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
-                }`}
-              >
-                {isPlayingVoiceSample ? (
-                  <>
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>DỪNG PHÁT</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>▶ NGHE THỬ GIỌNG</span>
-                  </>
-                )}
-              </button>
+            <div className="flex items-center space-x-2">
+              <Volume2 className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+                Cài đặt âm thanh & giọng đọc
+              </h3>
             </div>
 
-            {/* 4 Voice Mode Buttons */}
+            {/* Test Voice Sample Button */}
+            <button
+              id="btn-preview-voice"
+              type="button"
+              onClick={handlePreviewVoiceSample}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer ${
+                isPlayingVoiceSample
+                  ? 'bg-rose-600 text-white animate-pulse'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+            >
+              {isPlayingVoiceSample ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Dừng giọng</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Nghe thử giọng</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Voice Mode Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
+              1. Chế độ giọng đọc tiếng Anh
+            </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
-                id="btn-voice-natural"
+                id="btn-voice-mode-natural"
                 onClick={() => setVoiceMode('NATURAL')}
-                className={`py-3 px-2 rounded-xl text-xs font-extrabold border transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer ${
+                className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                   voiceMode === 'NATURAL'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                <span className="flex items-center space-x-1">
-                  <span>✨</span>
+                <span className="text-xs font-extrabold flex items-center space-x-1">
+                  <Sparkles className="w-3.5 h-3.5" />
                   <span>Tự nhiên nhất</span>
                 </span>
                 <span className={`text-[10px] font-medium ${voiceMode === 'NATURAL' ? 'text-indigo-100' : 'text-slate-500'}`}>
@@ -584,122 +680,107 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
 
               <button
                 type="button"
-                id="btn-voice-us"
+                id="btn-voice-mode-us"
                 onClick={() => setVoiceMode('US')}
-                className={`py-3 px-2 rounded-xl text-xs font-extrabold border transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer ${
+                className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                   voiceMode === 'US'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                <span>🇺🇸 Anh-Mỹ</span>
+                <span className="text-xs font-extrabold">🇺🇸 Giọng Mỹ (US)</span>
                 <span className={`text-[10px] font-medium ${voiceMode === 'US' ? 'text-indigo-100' : 'text-slate-500'}`}>
-                  en-US
+                  American English
                 </span>
               </button>
 
               <button
                 type="button"
-                id="btn-voice-uk"
+                id="btn-voice-mode-uk"
                 onClick={() => setVoiceMode('UK')}
-                className={`py-3 px-2 rounded-xl text-xs font-extrabold border transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer ${
+                className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                   voiceMode === 'UK'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                <span>🇬🇧 Anh-Anh</span>
+                <span className="text-xs font-extrabold">🇬🇧 Giọng Anh (UK)</span>
                 <span className={`text-[10px] font-medium ${voiceMode === 'UK' ? 'text-indigo-100' : 'text-slate-500'}`}>
-                  en-GB
+                  British English
                 </span>
               </button>
 
               <button
                 type="button"
-                id="btn-voice-custom"
-                onClick={() => {
-                  setVoiceMode('CUSTOM');
-                  if (!preferredVoiceURI && availableVoices.length > 0) {
-                    setPreferredVoiceURI(availableVoices[0].voiceURI);
-                    setPreferredVoiceName(availableVoices[0].name);
-                    setPreferredLang(availableVoices[0].lang);
-                  }
-                }}
-                className={`py-3 px-2 rounded-xl text-xs font-extrabold border transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer ${
+                id="btn-voice-mode-custom"
+                onClick={() => setVoiceMode('CUSTOM')}
+                className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                   voiceMode === 'CUSTOM'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                <span>🎙 Chọn cụ thể</span>
+                <span className="text-xs font-extrabold flex items-center space-x-1">
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>Tùy chọn giọng</span>
+                </span>
                 <span className={`text-[10px] font-medium ${voiceMode === 'CUSTOM' ? 'text-indigo-100' : 'text-slate-500'}`}>
-                  {availableVoices.length > 0 ? `${availableVoices.length} giọng` : 'Đang tải...'}
+                  Chọn trong máy
                 </span>
               </button>
             </div>
 
-            {/* Custom Voice Dropdown (Visible when CUSTOM is selected) */}
+            {/* Custom Voice Dropdown if CUSTOM selected */}
             {voiceMode === 'CUSTOM' && (
-              <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-2 animate-in fade-in">
-                <label htmlFor="select-custom-voice" className="block text-xs font-bold text-indigo-950 uppercase tracking-wider">
-                  Danh sách giọng tiếng Anh trên thiết bị của bạn:
+              <div className="mt-3 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-100 space-y-2 animate-in fade-in">
+                <label className="block text-xs font-bold text-indigo-900">
+                  Chọn giọng đọc khả dụng trên thiết bị ({availableVoices.length} giọng):
                 </label>
-                {availableVoices.length > 0 ? (
-                  <select
-                    id="select-custom-voice"
-                    value={preferredVoiceURI || resolvedVoice?.voiceURI || ''}
-                    onChange={handleCustomVoiceChange}
-                    className="w-full px-3 py-2.5 bg-white border border-indigo-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                  >
-                    {availableVoices.map((v) => (
-                      <option key={v.voiceURI} value={v.voiceURI}>
-                        {v.name} — {v.lang}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">
-                    Đang quét danh sách giọng từ hệ thống trình duyệt...
-                  </p>
-                )}
+                <select
+                  value={preferredVoiceURI}
+                  onChange={(e) => {
+                    const uri = e.target.value;
+                    setPreferredVoiceURI(uri);
+                    const v = availableVoices.find((x) => x.voiceURI === uri);
+                    if (v) {
+                      setPreferredVoiceName(v.name);
+                      setPreferredLang(v.lang);
+                    }
+                  }}
+                  className="w-full p-2.5 text-xs bg-white rounded-xl border border-indigo-200 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">-- Tự động chọn giọng tốt nhất --</option>
+                  {availableVoices.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
-
-            {/* Current Voice Badge info */}
-            <div className="flex items-center justify-between text-xs text-slate-500 bg-slate-100/80 px-3 py-2 rounded-xl">
-              <span className="truncate">
-                🎙 Giọng đang kích hoạt:{' '}
-                <strong className="text-slate-800 font-semibold">
-                  {resolvedVoice ? `${resolvedVoice.name} (${resolvedVoice.lang})` : 'Mặc định hệ thống'}
-                </strong>
-              </span>
-              <span className="shrink-0 text-[11px] text-indigo-600 font-bold ml-2">
-                {resolvedVoice?.default ? '★ System default' : ''}
-              </span>
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-slate-100">
-            {/* Cao độ giọng (Pitch) */}
+          {/* Speed & Pitch */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+            {/* Speed Options */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Cao độ giọng (Pitch)
+                2. Tốc độ đọc (Speed)
               </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {PITCH_OPTIONS.map((opt) => (
+              <div className="grid grid-cols-3 gap-1.5">
+                {SPEED_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
-                    id={`btn-pitch-${opt.value}`}
-                    onClick={() => setPitch(opt.value)}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      pitch === opt.value
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
+                    onClick={() => setPlaybackSpeed(opt.value)}
+                    className={`py-2 px-1 rounded-xl text-center border text-xs font-bold transition-all cursor-pointer ${
+                      playbackSpeed === opt.value
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
                     <div>{opt.label}</div>
-                    <div className={`text-[10px] font-normal ${pitch === opt.value ? 'text-indigo-100' : 'text-slate-400'}`}>
+                    <div className={`text-[9px] font-normal ${playbackSpeed === opt.value ? 'text-indigo-100' : 'text-slate-400'}`}>
                       {opt.desc}
                     </div>
                   </button>
@@ -707,28 +788,26 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
               </div>
             </div>
 
-            {/* Tốc độ đọc (Speed) */}
+            {/* Pitch Options */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Tốc độ đọc
+                3. Cao độ giọng (Pitch)
               </label>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
-                {SPEED_OPTIONS.map((spd) => (
+              <div className="grid grid-cols-4 gap-1.5">
+                {PITCH_OPTIONS.map((opt) => (
                   <button
-                    key={spd.value}
+                    key={opt.value}
                     type="button"
-                    id={`btn-speed-${spd.value}`}
-                    onClick={() => setPlaybackSpeed(spd.value)}
-                    className={`py-2 px-0.5 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
-                      playbackSpeed === spd.value
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-200'
+                    onClick={() => setPitch(opt.value)}
+                    className={`py-2 px-1 rounded-xl text-center border text-xs font-bold transition-all cursor-pointer ${
+                      pitch === opt.value
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
-                    title={spd.desc}
                   >
-                    <div>{spd.label}</div>
-                    <div className={`text-[9px] font-normal truncate ${playbackSpeed === spd.value ? 'text-indigo-100' : 'text-slate-400'}`}>
-                      {spd.desc}
+                    <div>{opt.label}</div>
+                    <div className={`text-[9px] font-normal ${pitch === opt.value ? 'text-indigo-100' : 'text-slate-400'}`}>
+                      {opt.desc}
                     </div>
                   </button>
                 ))}
@@ -736,14 +815,15 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-slate-100">
-            {/* Số lượt nghe cho phép */}
+          {/* Limits & Rules */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+            {/* Giới hạn lượt nghe */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Số lần nghe
+                Số lần nghe tối đa mỗi câu
               </label>
               <div className="grid grid-cols-4 gap-1.5">
-                {([1, 2, 3, 0] as ListenLimit[]).map((limit) => (
+                {([0, 1, 2, 3] as ListenLimit[]).map((limit) => (
                   <button
                     key={limit}
                     type="button"
@@ -852,18 +932,44 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
           </div>
         </section>
 
-        {/* Final CTA Button */}
-        <div className="pt-2">
+        {/* PRIMARY ACTION BUTTONS: Multi-Class Homework, Save to Library, Direct Link */}
+        <div className="pt-2 flex flex-col gap-3">
+          {/* Main 1-Click Multi-Class Homework Button */}
           <button
-            id="btn-generate-share-bottom"
-            onClick={handleGenerate}
-            className="w-full min-h-[56px] py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-3 cursor-pointer"
+            id="btn-generate-homework-for-classes"
+            type="button"
+            onClick={handleOpenHomework}
+            className="w-full min-h-[56px] py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-3 cursor-pointer active:scale-[0.99]"
           >
-            <LinkIcon className="w-6 h-6 shrink-0" />
-            <span>TẠO LINK BÀI TẬP</span>
+            <Send className="w-6 h-6 shrink-0" />
+            <span>🚀 GIAO BÀI CHO CÁC LỚP (TẠO LINK & LỜI NHẮN ZALO)</span>
           </button>
-          <p className="text-center text-xs text-slate-500 mt-2.5">
-            Link chứa toàn bộ dữ liệu bài tập • Không lưu dữ liệu vào máy chủ
+
+          {/* Secondary Actions Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              id="btn-save-to-library"
+              type="button"
+              onClick={handleSaveToLibrary}
+              className="py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 font-bold text-sm shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <Save className="w-4 h-4 text-indigo-600" />
+              <span>💾 LƯU VÀO THƯ VIỆN BÀI TẬP</span>
+            </button>
+
+            <button
+              id="btn-generate-direct-link"
+              type="button"
+              onClick={handleGenerateLink}
+              className="py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 font-bold text-sm shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <LinkIcon className="w-4 h-4 text-indigo-600" />
+              <span>🔗 TẠO LINK TRỰC TIẾP / MÃ QR</span>
+            </button>
+          </div>
+
+          <p className="text-center text-xs text-slate-500 mt-1">
+            Không cần máy chủ • Toàn bộ bài tập và dữ liệu lớp được lưu an toàn trên máy của bạn
           </p>
         </div>
       </main>

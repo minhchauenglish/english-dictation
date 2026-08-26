@@ -83,7 +83,7 @@ export const DirectLinkModal: React.FC<DirectLinkModalProps> = ({
                 setInputUrl(e.target.value);
                 setError('');
               }}
-              placeholder="https://.../#/practice/..."
+              placeholder="https://minhchauenglish.github.io/english-dictation/#/practice/..."
               className="w-full px-4 py-3 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoFocus
             />

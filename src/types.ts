@@ -66,3 +66,56 @@ export interface PracticeSessionResult {
   completedAt: string;
   isRemediationRound?: boolean;
 }
+
+export interface SavedDictationItem {
+  id: string;
+  title: string;
+  classLevel: string; // e.g. "Grade 3", "KID 1", "Grade 4", "Teen"
+  topic: string; // e.g. "Unit 4: My Family", "Daily Routine"
+  passage: string; // raw input passage
+  exercise: DictationExercise;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeacherClass {
+  id: string;
+  name: string; // e.g. "Grade 3A", "KID1A"
+  gradeLevel?: string;
+  studentCount?: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ClassAssignmentMapping {
+  classId: string;
+  dictationId: string; // ID of SavedDictationItem
+  assignedAt?: string;
+  updatedAt?: string;
+}
+
+export interface DailyHomeworkBatchItem {
+  classId: string;
+  className: string;
+  exerciseTitle: string;
+  dictationId: string;
+  link: string;
+  zaloMessage: string;
+  exercise: DictationExercise;
+  topic?: string;
+  classLevel?: string;
+  status: string; // 'Đã tạo link' | 'Đã giao'
+}
+
+export interface HomeworkHistoryItem {
+  id: string;
+  date: string; // ISO date string or formatted date string
+  className: string;
+  exerciseTitle: string;
+  classLevel?: string;
+  topic?: string;
+  sentenceCount: number;
+  exerciseMode: ExerciseMode;
+  generatedLink: string;
+  status?: string; // e.g. "Đã giao"
+}
