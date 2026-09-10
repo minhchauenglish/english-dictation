@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Check,
@@ -25,6 +25,7 @@ import {
 import { TeacherClass, SavedDictationItem } from '../../types';
 import { clientStorage } from '../../utils/storage';
 import { convertImportedLessonToDictation } from '../../utils/wordParser';
+import { evaluateLessonDuplicates } from '../../utils/duplicateDetector';
 
 interface ImportPreviewModalProps {
   fileResults: ImportFileResult[];
@@ -45,49 +46,6 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     clientStorage.getTeacherClasses()
   );
 
-  // Flatten and initialize lessons with duplicate detection
-  const [lessons, setLessons] = useState<ImportedLesson[]>(() => {
-    const all: ImportedLesson[] = [];
-    fileResults.forEach((file) => {
-      file.lessons.forEach((l) => {
-        // Duplicate check against existing library
-        const duplicate = existingLibrary.find((item) => {
-          const t = item.title.trim().toLowerCase();
-          const target = l.title.trim().toLowerCase();
-          return (
-            t === target ||
-            t.endsWith(`: ${target}`) ||
-            target.endsWith(`: ${t}`) ||
-            (l.lessonNumber && t.includes(`lesson ${l.lessonNumber}:`))
-          );
-        });
-
-        all.push({
-          ...l,
-          isDuplicate: !!duplicate,
-          duplicateExistingId: duplicate?.id,
-          duplicateExistingTitle: duplicate?.title,
-          duplicateResolution: duplicate ? 'IMPORT_ANYWAY' : undefined,
-        });
-      });
-    });
-    return all;
-  });
-
-  // Selected file filter tab
-  const [activeFileFilter, setActiveFileFilter] = useState<string>('ALL');
-
-  // Currently editing lesson (for the inline editor drawer/modal)
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{
-    lessonNumber: string;
-    title: string;
-    type: LessonContentType;
-    wordsText: string;
-    sentencesText: string;
-    paragraphText: string;
-  } | null>(null);
-
   // Class assignment state - tracked by classId
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>(() => {
     const matchedIds = new Set<string>();
@@ -102,6 +60,58 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     });
     return Array.from(matchedIds);
   });
+
+  // Flatten and initialize lessons with class-aware duplicate detection
+  const [lessons, setLessons] = useState<ImportedLesson[]>(() => {
+    const all: ImportedLesson[] = [];
+    fileResults.forEach((file) => {
+      file.lessons.forEach((l) => {
+        all.push({ ...l });
+      });
+    });
+
+    const initialClassIds: string[] = [];
+    fileResults.forEach((f) => {
+      if (f.detectedClass) {
+        const found = teacherClasses.find(
+          (c) =>
+            c.name.trim().toLowerCase() === f.detectedClass?.trim().toLowerCase()
+        );
+        if (found && !initialClassIds.includes(found.id)) {
+          initialClassIds.push(found.id);
+        }
+      }
+    });
+
+    return evaluateLessonDuplicates(all, existingLibrary, {
+      targetClassIds: initialClassIds,
+      teacherClasses,
+    });
+  });
+
+  // Automatically update duplicate status when class assignment selection changes
+  useEffect(() => {
+    setLessons((prev) =>
+      evaluateLessonDuplicates(prev, existingLibrary, {
+        targetClassIds: selectedClassIds,
+        teacherClasses,
+      })
+    );
+  }, [selectedClassIds, teacherClasses, existingLibrary]);
+
+  // Selected file filter tab
+  const [activeFileFilter, setActiveFileFilter] = useState<string>('ALL');
+
+  // Currently editing lesson (for the inline editor drawer/modal)
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    lessonNumber: string;
+    title: string;
+    type: LessonContentType;
+    wordsText: string;
+    sentencesText: string;
+    paragraphText: string;
+  } | null>(null);
 
   // Current daily schedule assignments mapping (classId -> dictationId)
   const currentDailyAssignments = useMemo(() => clientStorage.getClassAssignments(), []);

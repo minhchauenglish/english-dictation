@@ -4,6 +4,7 @@ import {
   HomeworkHistoryItem,
   DictationExercise,
 } from '../types';
+import { findDuplicateInLibrary } from './duplicateDetector';
 
 const STORAGE_KEYS = {
   STUDENT_NAME: 'eng_dict_student_name',
@@ -355,17 +356,25 @@ class ClientStorage {
     return result;
   }
 
-  public findDuplicateDictation(title: string): SavedDictationItem | undefined {
+  public findDuplicateDictation(
+    title: string,
+    classContext?: { classLevel?: string; classIds?: string[]; lessonNumber?: string }
+  ): SavedDictationItem | undefined {
     const list = this.getSavedDictations();
-    const normalized = title.trim().toLowerCase();
-    return list.find((item) => {
-      const t = item.title.trim().toLowerCase();
-      return (
-        t === normalized ||
-        t.endsWith(`: ${normalized}`) ||
-        normalized.endsWith(`: ${t}`)
-      );
-    });
+    const classes = this.getTeacherClasses();
+    return findDuplicateInLibrary(
+      {
+        title,
+        lessonNumber: classContext?.lessonNumber,
+        detectedClass: classContext?.classLevel,
+      },
+      list,
+      {
+        targetClassIds: classContext?.classIds,
+        targetClassName: classContext?.classLevel,
+        teacherClasses: classes,
+      }
+    );
   }
 
   public saveAllDictations(list: SavedDictationItem[]): void {
