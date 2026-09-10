@@ -252,6 +252,123 @@ BÀI học cần có TITLE
   console.log(`  ✓ PASSED: Matched exact duplicate: ${foundDupForIncoming1.title} (${foundDupForIncoming1.id})`);
 
   console.log('\nALL DUPLICATE DETECTION TESTS PASSED PERFECTLY!');
+
+  console.log('\n=== TEST 5: EXCEL EXPORT UNIT TESTS ===');
+  const {
+    createHomeworkLinksWorkbook,
+    exportHomeworkLinksToExcel,
+    formatExportDate,
+    formatExportTime,
+    formatExerciseMode,
+  } = await import('./src/utils/excelExporter');
+  const XLSX = await import('xlsx');
+
+  // Sub-test 5.1: No data -> does NOT export empty file
+  console.log('\n- Testing Sub-test 5.1: Empty data handling');
+  const emptyWb = createHomeworkLinksWorkbook([]);
+  if (emptyWb !== null) {
+    throw new Error('FAILED: Expected null workbook when history is empty');
+  }
+  const emptyExportResult = exportHomeworkLinksToExcel([]);
+  if (emptyExportResult.success !== false || emptyExportResult.message !== 'Chưa có link bài tập nào để xuất.') {
+    throw new Error(`FAILED: Expected failure result with clear message, got: ${JSON.stringify(emptyExportResult)}`);
+  }
+  console.log('  ✓ PASSED: Correctly refused to create empty Excel file and returned clear message');
+
+  // Sub-test 5.2: Multi-class homework assignment -> Each class on its own row
+  console.log('\n- Testing Sub-test 5.2: Multiple classes -> Each class one row with exact URL');
+  const sampleUrl1 = 'https://dictation-app.example.com/?d=hw_kid1a_123';
+  const sampleUrl2 = 'https://dictation-app.example.com/?d=hw_kid1b_456';
+  const sampleUrl3 = 'https://dictation-app.example.com/?d=hw_kid2a_789';
+
+  const mockHistoryItems: import('./src/types').HomeworkHistoryItem[] = [
+    {
+      id: 'hw_1',
+      date: '2026-09-10T13:20:00.000Z',
+      className: 'KID1A',
+      exerciseTitle: 'Lesson 3: MY SCHOOL',
+      topic: 'MY SCHOOL',
+      sentenceCount: 5,
+      exerciseMode: 'PRACTICE',
+      generatedLink: sampleUrl1,
+      status: 'Đã giao',
+    },
+    {
+      id: 'hw_2',
+      date: '2026-09-10T13:20:00.000Z',
+      className: 'KID1B',
+      exerciseTitle: 'Lesson 3: MY SCHOOL',
+      topic: 'MY SCHOOL',
+      sentenceCount: 5,
+      exerciseMode: 'PRACTICE',
+      generatedLink: sampleUrl2,
+      status: 'Đã giao',
+    },
+    {
+      id: 'hw_3',
+      date: '2026-09-10T13:21:00.000Z',
+      className: 'KID2A',
+      exerciseTitle: 'Lesson 70: BEING KIND',
+      topic: 'BEING KIND',
+      sentenceCount: 6,
+      exerciseMode: 'TEST',
+      generatedLink: sampleUrl3,
+      status: 'Đã giao',
+    },
+  ];
+
+  const workbook = createHomeworkLinksWorkbook(mockHistoryItems);
+  if (!workbook) {
+    throw new Error('FAILED: Expected valid workbook for 3 history items');
+  }
+
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const sheetJson = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1 });
+
+  console.log(`  Generated sheet rows count: ${sheetJson.length}`);
+  // Row 0 is header, rows 1, 2, 3 are data rows
+  if (sheetJson.length !== 4) {
+    throw new Error(`FAILED: Expected 4 rows (1 header + 3 data rows), but got ${sheetJson.length}`);
+  }
+
+  // Verify headers
+  const headerRow = sheetJson[0];
+  const expectedHeaders = ['Ngày giao', 'Giờ giao', 'Lớp', 'Tên bài tập', 'Chủ đề', 'Chế độ', 'Link bài tập'];
+  expectedHeaders.forEach((exp, idx) => {
+    if (headerRow[idx] !== exp) {
+      throw new Error(`FAILED: Header column ${idx} expected "${exp}", got "${headerRow[idx]}"`);
+    }
+  });
+  console.log('  ✓ PASSED: Header row verified exactly');
+
+  // Verify each row data and URL preservation
+  // Row 1: KID1A
+  const row1 = sheetJson[1];
+  if (row1[2] !== 'KID1A' || row1[3] !== 'Lesson 3: MY SCHOOL' || row1[5] !== 'Luyện tập' || row1[6] !== sampleUrl1) {
+    throw new Error(`FAILED: Row 1 data mismatch: ${JSON.stringify(row1)}`);
+  }
+  // Row 2: KID1B
+  const row2 = sheetJson[2];
+  if (row2[2] !== 'KID1B' || row2[3] !== 'Lesson 3: MY SCHOOL' || row2[5] !== 'Luyện tập' || row2[6] !== sampleUrl2) {
+    throw new Error(`FAILED: Row 2 data mismatch: ${JSON.stringify(row2)}`);
+  }
+  // Row 3: KID2A
+  const row3 = sheetJson[3];
+  if (row3[2] !== 'KID2A' || row3[3] !== 'Lesson 70: BEING KIND' || row3[5] !== 'Kiểm tra' || row3[6] !== sampleUrl3) {
+    throw new Error(`FAILED: Row 3 data mismatch: ${JSON.stringify(row3)}`);
+  }
+  console.log('  ✓ PASSED: Each class has its own row and URLs are preserved 100% accurately');
+
+  // Sub-test 5.3: Verify binary XLSX generation
+  const xlsxBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  if (!xlsxBuffer || xlsxBuffer.length === 0) {
+    throw new Error('FAILED: Generated XLSX buffer is empty');
+  }
+  console.log(`  Generated XLSX file buffer size: ${xlsxBuffer.length} bytes`);
+  console.log('  ✓ PASSED: Valid XLSX file buffer created successfully');
+
+  console.log('\nALL EXCEL EXPORT TESTS PASSED PERFECTLY!');
 }
 
 runTests().catch((err) => {

@@ -12,10 +12,12 @@ import {
   AlertCircle,
   Filter,
   CheckCircle2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { HomeworkHistoryItem } from '../../types';
 import { clientStorage } from '../../utils/storage';
 import { formatDailyZaloMessage, formatZaloHomeworkMessage } from '../../utils/homeworkMessage';
+import { exportHomeworkLinksToExcel } from '../../utils/excelExporter';
 
 interface HomeworkHistoryTabProps {
   onPreviewUrl?: (url: string) => void;
@@ -31,6 +33,37 @@ export const HomeworkHistoryTab: React.FC<HomeworkHistoryTabProps> = ({ onPrevie
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [isClearingAll, setIsClearingAll] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [toastMessage, setToastMessage] = useState<{
+    type: 'success' | 'warning';
+    text: string;
+  } | null>(null);
+
+  // Export all homework links to Excel
+  const handleExportExcel = () => {
+    if (history.length === 0) {
+      setToastMessage({
+        type: 'warning',
+        text: 'Chưa có link bài tập nào để xuất.',
+      });
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    const result = exportHomeworkLinksToExcel(history, 'English_Dictation_Links.xlsx');
+    if (result.success) {
+      setToastMessage({
+        type: 'success',
+        text: `Đã xuất thành công ${result.count} link bài tập ra file English_Dictation_Links.xlsx!`,
+      });
+      setTimeout(() => setToastMessage(null), 4000);
+    } else {
+      setToastMessage({
+        type: 'warning',
+        text: result.message || 'Chưa có link bài tập nào để xuất.',
+      });
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
 
   // Unique classes present in history for filtering
   const uniqueClasses = useMemo(() => {
@@ -157,6 +190,18 @@ export const HomeworkHistoryTab: React.FC<HomeworkHistoryTabProps> = ({ onPrevie
           </div>
         )}
 
+        {/* Export Excel Button */}
+        <button
+          id="btn-export-links-excel"
+          type="button"
+          onClick={handleExportExcel}
+          className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-extrabold transition-all shadow-xs flex items-center justify-center space-x-1.5 sm:space-x-2 shrink-0 cursor-pointer active:scale-95"
+          title="Xuất toàn bộ link bài tập ra file Excel English_Dictation_Links.xlsx"
+        >
+          <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
+          <span>📊 XUẤT TỔNG LINK</span>
+        </button>
+
         {/* Clear history button */}
         {history.length > 0 && (
           <button
@@ -169,6 +214,34 @@ export const HomeworkHistoryTab: React.FC<HomeworkHistoryTabProps> = ({ onPrevie
           </button>
         )}
       </div>
+
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div
+          id="export-links-toast-banner"
+          className={`p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-bold animate-in fade-in slide-in-from-top-1 duration-150 ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {toastMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-slate-400 hover:text-slate-600 cursor-pointer text-xs font-semibold px-2 py-0.5 rounded-lg hover:bg-black/5"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Clear Confirmation Modal / Banner */}
       {isClearingAll && (
