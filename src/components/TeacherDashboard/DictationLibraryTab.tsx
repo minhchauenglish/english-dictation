@@ -13,15 +13,18 @@ import {
   Clock,
   CheckCircle2,
   Calendar,
+  FileUp,
 } from 'lucide-react';
 import { SavedDictationItem, DictationExercise } from '../../types';
 import { clientStorage } from '../../utils/storage';
+import { WordImportModal } from './WordImportModal';
 
 interface DictationLibraryTabProps {
   onOpenCreateNew: () => void;
   onEditExercise: (item: SavedDictationItem) => void;
   onPreviewExercise: (exercise: DictationExercise) => void;
   onGenerateHomework: (item: SavedDictationItem) => void;
+  onLibraryUpdated?: () => void;
 }
 
 export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
@@ -29,22 +32,36 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
   onEditExercise,
   onPreviewExercise,
   onGenerateHomework,
+  onLibraryUpdated,
 }) => {
   const [dictations, setDictations] = useState<SavedDictationItem[]>(() =>
     clientStorage.getSavedDictations()
   );
+  const teacherClasses = useMemo(() => clientStorage.getTeacherClasses(), []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isWordImportOpen, setIsWordImportOpen] = useState(false);
 
-  // Extract unique class levels for filtering
+  // Extract unique class levels and assigned classes for filtering
   const availableLevels = useMemo(() => {
     const levels = new Set<string>();
     dictations.forEach((d) => {
-      if (d.classLevel?.trim()) levels.add(d.classLevel.trim());
+      if (d.classLevel?.trim()) {
+        d.classLevel.split(',').forEach((lvl) => {
+          const trimmed = lvl.trim();
+          if (trimmed) levels.add(trimmed);
+        });
+      }
+      if (d.classIds && d.classIds.length > 0) {
+        d.classIds.forEach((cid) => {
+          const cls = teacherClasses.find((tc) => tc.id === cid);
+          if (cls) levels.add(cls.name);
+        });
+      }
     });
-    return Array.from(levels);
-  }, [dictations]);
+    return Array.from(levels).sort();
+  }, [dictations, teacherClasses]);
 
   // Filtered dictations
   const filteredDictations = useMemo(() => {
@@ -54,21 +71,41 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
         d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (d.topic && d.topic.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (d.classLevel && d.classLevel.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (d.passage && d.passage.toLowerCase().includes(searchQuery.toLowerCase()));
+        (d.passage && d.passage.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (d.classIds &&
+          d.classIds.some((cid) => {
+            const cls = teacherClasses.find((tc) => tc.id === cid);
+            return cls && cls.name.toLowerCase().includes(searchQuery.toLowerCase());
+          }));
 
       const matchLevel =
         selectedLevel === 'ALL' ||
-        (d.classLevel && d.classLevel.toLowerCase() === selectedLevel.toLowerCase());
+        (d.classLevel &&
+          d.classLevel
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+            .includes(selectedLevel.toLowerCase())) ||
+        (d.classIds &&
+          d.classIds.some((cid) => {
+            const cls = teacherClasses.find((tc) => tc.id === cid);
+            return cls && cls.name.toLowerCase() === selectedLevel.toLowerCase();
+          }));
 
       return matchQuery && matchLevel;
     });
-  }, [dictations, searchQuery, selectedLevel]);
+  }, [dictations, teacherClasses, searchQuery, selectedLevel]);
 
   // Delete exercise
   const handleDelete = (id: string) => {
     clientStorage.deleteDictation(id);
     setDictations(clientStorage.getSavedDictations());
     setDeletingId(null);
+    onLibraryUpdated?.();
+  };
+
+  const handleWordImportSuccess = () => {
+    setDictations(clientStorage.getSavedDictations());
+    onLibraryUpdated?.();
   };
 
   return (
@@ -97,16 +134,29 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
           )}
         </div>
 
-        {/* Create New Button */}
-        <button
-          id="btn-library-create-new"
-          type="button"
-          onClick={onOpenCreateNew}
-          className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center justify-center space-x-2 shrink-0 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tạo bài mới</span>
-        </button>
+        {/* Action Buttons: Create New & Import Word */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            id="btn-library-create-new"
+            type="button"
+            onClick={onOpenCreateNew}
+            className="px-4 sm:px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tạo bài mới</span>
+          </button>
+
+          <button
+            id="btn-library-import-word"
+            type="button"
+            onClick={() => setIsWordImportOpen(true)}
+            className="px-4 sm:px-5 py-2.5 rounded-2xl bg-white hover:bg-indigo-50/70 text-indigo-700 border border-indigo-200 hover:border-indigo-300 font-extrabold text-xs sm:text-sm shadow-2xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            title="Nhập hàng loạt bài học từ file Word (.docx)"
+          >
+            <FileUp className="w-4 h-4 text-indigo-600" />
+            <span>📥 Import Word</span>
+          </button>
+        </div>
       </div>
 
       {/* Class Level Filter Pills */}
@@ -182,9 +232,36 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
                           {item.title}
                         </span>
                         {item.classLevel && (
-                          <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold">
-                            {item.classLevel}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {item.classLevel
+                              .split(',')
+                              .map((c) => c.trim())
+                              .filter(Boolean)
+                              .map((cls) => (
+                                <span
+                                  key={cls}
+                                  className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold"
+                                >
+                                  {cls}
+                                </span>
+                              ))}
+                          </div>
+                        )}
+                        {item.classIds && item.classIds.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {item.classIds.map((cid) => {
+                              const cls = teacherClasses.find((tc) => tc.id === cid);
+                              if (!cls || cls.name === item.classLevel) return null;
+                              return (
+                                <span
+                                  key={cid}
+                                  className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200"
+                                >
+                                  {cls.name}
+                                </span>
+                              );
+                            })}
+                          </div>
                         )}
                         <span
                           className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
@@ -291,6 +368,13 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
           })}
         </div>
       )}
+
+      {/* Word Import Modal */}
+      <WordImportModal
+        isOpen={isWordImportOpen}
+        onClose={() => setIsWordImportOpen(false)}
+        onImportSuccess={handleWordImportSuccess}
+      />
     </div>
   );
 };

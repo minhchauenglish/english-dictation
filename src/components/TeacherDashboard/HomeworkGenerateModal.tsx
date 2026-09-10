@@ -20,6 +20,7 @@ import { formatZaloHomeworkMessage } from '../../utils/homeworkMessage';
 interface HomeworkGenerateModalProps {
   exercise: DictationExercise;
   classLevel?: string;
+  classIds?: string[];
   topic?: string;
   onClose: () => void;
   onPreview?: (exercise: DictationExercise) => void;
@@ -28,6 +29,7 @@ interface HomeworkGenerateModalProps {
 export const HomeworkGenerateModal: React.FC<HomeworkGenerateModalProps> = ({
   exercise,
   classLevel,
+  classIds,
   topic,
   onClose,
   onPreview,
@@ -35,10 +37,24 @@ export const HomeworkGenerateModal: React.FC<HomeworkGenerateModalProps> = ({
   const [classes, setClasses] = useState<TeacherClass[]>(() => clientStorage.getTeacherClasses());
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>(() => {
     const list = clientStorage.getTeacherClasses();
-    // Default select classes that match classLevel or select top 3
+    // 1. If explicit classIds provided, select those
+    if (classIds && classIds.length > 0) {
+      const valid = list.filter((c) => classIds.includes(c.id)).map((c) => c.id);
+      if (valid.length > 0) return valid;
+    }
+    // 2. Default select classes that match classLevel or select top 3
     if (classLevel) {
+      const levelParts = classLevel
+        .split(',')
+        .map((p) => p.trim().toLowerCase())
+        .filter(Boolean);
       const matched = list.filter((c) =>
-        c.name.toLowerCase().includes(classLevel.toLowerCase().trim())
+        levelParts.some(
+          (lp) =>
+            c.name.toLowerCase() === lp ||
+            c.name.toLowerCase().includes(lp) ||
+            lp.includes(c.name.toLowerCase())
+        )
       );
       if (matched.length > 0) return matched.map((c) => c.id);
     }

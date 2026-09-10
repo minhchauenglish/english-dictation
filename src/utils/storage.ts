@@ -313,7 +313,62 @@ class ClientStorage {
     this.saveAllDictations(list);
   }
 
-  private saveAllDictations(list: SavedDictationItem[]): void {
+  public batchSaveDictations(
+    itemsToSave: {
+      item: Omit<SavedDictationItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+      action: 'ADD' | 'REPLACE';
+      replaceTargetId?: string;
+    }[]
+  ): SavedDictationItem[] {
+    const list = this.getSavedDictations();
+    const now = new Date().toISOString();
+    const result: SavedDictationItem[] = [];
+
+    for (const entry of itemsToSave) {
+      if (entry.action === 'REPLACE' && entry.replaceTargetId) {
+        const idx = list.findIndex((x) => x.id === entry.replaceTargetId);
+        if (idx >= 0) {
+          const replaced: SavedDictationItem = {
+            ...list[idx],
+            ...entry.item,
+            id: list[idx].id,
+            updatedAt: now,
+          };
+          list[idx] = replaced;
+          result.push(replaced);
+          continue;
+        }
+      }
+
+      // Default: create as new item
+      const newItem: SavedDictationItem = {
+        ...entry.item,
+        id: entry.item.id || `dict_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        createdAt: now,
+        updatedAt: now,
+      };
+      list.unshift(newItem);
+      result.push(newItem);
+    }
+
+    this.saveAllDictations(list);
+    return result;
+  }
+
+  public findDuplicateDictation(title: string): SavedDictationItem | undefined {
+    const list = this.getSavedDictations();
+    const normalized = title.trim().toLowerCase();
+    return list.find((item) => {
+      const t = item.title.trim().toLowerCase();
+      return (
+        t === normalized ||
+        t.endsWith(`: ${normalized}`) ||
+        normalized.endsWith(`: ${t}`)
+      );
+    });
+  }
+
+  public saveAllDictations(list: SavedDictationItem[]): void {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(STORAGE_KEYS.SAVED_DICTATIONS, JSON.stringify(list));
@@ -423,6 +478,26 @@ class ClientStorage {
   public resetClassAssignmentsToDefaults(): Record<string, string> {
     this.saveAllClassAssignments(DEFAULT_INITIAL_ASSIGNMENTS);
     return DEFAULT_INITIAL_ASSIGNMENTS;
+  }
+
+  public getAssignmentForClass(classId: string): string | undefined {
+    const assignments = this.getClassAssignments();
+    return assignments[classId];
+  }
+
+  public getClassesForDictation(dictationId: string): string[] {
+    const assignments = this.getClassAssignments();
+    return Object.entries(assignments)
+      .filter(([_, dId]) => dId === dictationId)
+      .map(([classId]) => classId);
+  }
+
+  public assignDictationToClasses(dictationId: string, classIds: string[]): void {
+    const assignments = this.getClassAssignments();
+    classIds.forEach((classId) => {
+      assignments[classId] = dictationId;
+    });
+    this.saveAllClassAssignments(assignments);
   }
 
   // Homework History

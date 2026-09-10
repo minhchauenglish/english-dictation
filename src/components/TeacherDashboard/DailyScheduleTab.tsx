@@ -96,11 +96,18 @@ export const DailyScheduleTab: React.FC<DailyScheduleTabProps> = ({
     if (library.length === 0) return;
     const newMapping: Record<string, string> = {};
     classes.forEach((cls, idx) => {
-      // First try to match by class name keywords (e.g. Grade 3 -> Grade 3)
+      // First try to match by class name keywords (e.g. Grade 3 -> Grade 3, or multi-class '1A, 1B')
       const matchingLib = library.find(
         (lib) =>
           lib.classLevel &&
-          cls.name.toLowerCase().includes(lib.classLevel.toLowerCase().trim())
+          lib.classLevel
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+            .some(
+              (lvl) =>
+                cls.name.toLowerCase().includes(lvl) ||
+                lvl.includes(cls.name.toLowerCase().trim())
+            )
       );
       if (matchingLib) {
         newMapping[cls.id] = matchingLib.id;

@@ -71,6 +71,7 @@ export interface SavedDictationItem {
   id: string;
   title: string;
   classLevel: string; // e.g. "Grade 3", "KID 1", "Grade 4", "Teen"
+  classIds?: string[]; // Danh sách classId các lớp được gán (e.g. ['c1', 'c2'])
   topic: string; // e.g. "Unit 4: My Family", "Daily Routine"
   passage: string; // raw input passage
   exercise: DictationExercise;

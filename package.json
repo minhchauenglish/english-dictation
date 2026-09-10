@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "npx tsx test-parser.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -16,8 +17,10 @@
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "^5.0.4",
     "canvas-confetti": "^1.9.4",
+    "docx": "^9.7.1",
     "lucide-react": "^0.546.0",
     "lz-string": "^1.5.0",
+    "mammoth": "^1.12.2",
     "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",

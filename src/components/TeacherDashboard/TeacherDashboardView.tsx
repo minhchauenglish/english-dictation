@@ -48,6 +48,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   const [homeworkModalData, setHomeworkModalData] = useState<{
     exercise: DictationExercise;
     classLevel?: string;
+    classIds?: string[];
     topic?: string;
   } | null>(null);
 
@@ -101,6 +102,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
     setHomeworkModalData({
       exercise: item.exercise,
       classLevel: item.classLevel,
+      classIds: item.classIds,
       topic: item.topic,
     });
   };
@@ -296,6 +298,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             onEditExercise={handleEditExercise}
             onPreviewExercise={onPreviewExercise}
             onGenerateHomework={handleOpenHomeworkForSavedItem}
+            onLibraryUpdated={refreshCounts}
           />
         )}
 
@@ -339,6 +342,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
         <HomeworkGenerateModal
           exercise={homeworkModalData.exercise}
           classLevel={homeworkModalData.classLevel}
+          classIds={homeworkModalData.classIds}
           topic={homeworkModalData.topic}
           onClose={() => {
             setHomeworkModalData(null);
