@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Trophy,
@@ -12,9 +12,15 @@ import {
   ArrowLeft,
   Sparkles,
   Lightbulb,
+  BookOpen,
 } from 'lucide-react';
 import { DictationExercise, SentenceSubmissionResult } from '../types';
-import { audioPlayer } from '../utils/audioPlayer';
+import {
+  audioPlayer,
+  getStoredVoiceAccent,
+  getStoredPlaybackSpeed,
+  getStoredVoiceURI,
+} from '../utils/audioPlayer';
 
 interface StudentResultViewProps {
   exercise: DictationExercise;
@@ -36,6 +42,31 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   onBackToHome,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [showAllAnswers, setShowAllAnswers] = useState(false);
+  const [playingSentenceIdx, setPlayingSentenceIdx] = useState<number | null>(null);
+
+  // All sentences in exercise ordered by order
+  const orderedSentences = useMemo(() => {
+    if (!exercise || !exercise.sentences) return [];
+    return [...exercise.sentences].sort((a, b) => a.order - b.order);
+  }, [exercise]);
+
+  const handlePlaySentence = (text: string, idx: number) => {
+    setPlayingSentenceIdx(idx);
+    const accent = getStoredVoiceAccent();
+    const speed = getStoredPlaybackSpeed();
+    const storedURI = getStoredVoiceURI();
+
+    audioPlayer.play({
+      text,
+      preferredVoiceURI: storedURI || undefined,
+      accent,
+      speed,
+      pitch: exercise.pitch ?? 1.0,
+      onEnd: () => setPlayingSentenceIdx(null),
+      onError: () => setPlayingSentenceIdx(null),
+    });
+  };
 
   // Compute Overall Score, Accuracy, and Hints Used
   const totalSentences = sentenceResults.length;
@@ -301,6 +332,77 @@ Từ cần luyện: ${wrongWordsList}`
             ))}
           </div>
         </div>
+
+        {/* Button to view all answers */}
+        <div>
+          <button
+            type="button"
+            id="btn-view-all-answers"
+            onClick={() => setShowAllAnswers((prev) => !prev)}
+            className="w-full min-h-[50px] py-3 px-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-indigo-200 font-black text-sm sm:text-base transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs active:scale-[0.99]"
+          >
+            <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
+            <span>{showAllAnswers ? 'ẨN ĐÁP ÁN CẢ BÀI' : '📖 XEM ĐÁP ÁN CẢ BÀI'}</span>
+          </button>
+        </div>
+
+        {/* Card: All Answers for the entire exercise */}
+        {showAllAnswers && (
+          <div
+            id="all-answers-container"
+            className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4 text-left animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <BookOpen className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-black text-slate-900 text-sm sm:text-base uppercase tracking-wider">
+                  ĐÁP ÁN CẢ BÀI ({orderedSentences.length} câu)
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-slate-400">
+                Toàn bộ câu đúng theo bài
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {orderedSentences.map((sent, idx) => (
+                <div
+                  key={sent.id || idx}
+                  id={`full-answer-item-${idx + 1}`}
+                  className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 hover:bg-indigo-50/40 hover:border-indigo-200 transition-colors"
+                >
+                  <div className="flex items-start space-x-3 min-w-0 flex-1">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
+                      {sent.order || idx + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm sm:text-base font-bold text-slate-900 select-text leading-relaxed">
+                        {sent.text}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    id={`btn-listen-answer-${idx + 1}`}
+                    title={`Nghe lại câu ${sent.order || idx + 1}`}
+                    onClick={() => handlePlaySentence(sent.text, idx)}
+                    className={`p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-extrabold shadow-xs transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer active:scale-95 ${
+                      playingSentenceIdx === idx
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white hover:bg-indigo-600 text-indigo-600 hover:text-white border-slate-200 hover:border-indigo-600'
+                    }`}
+                  >
+                    <Volume2 className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline">
+                      {playingSentenceIdx === idx ? 'Đang phát...' : 'Nghe'}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">

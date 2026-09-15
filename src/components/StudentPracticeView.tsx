@@ -24,11 +24,18 @@ import {
   filterEnglishVoices,
   resolveVoice,
   PREVIEW_SENTENCE,
+  getStoredVoiceAccent,
+  setStoredVoiceAccent,
+  getStoredPlaybackSpeed,
+  setStoredPlaybackSpeed,
+  getStoredVoiceURI,
+  setStoredVoiceURI,
 } from '../utils/audioPlayer';
 import { compareSentenceAnswers } from '../utils/textComparison';
 import {
-  getSentenceWordCount,
-  generateFirstLetterHint,
+  getFirstWord,
+  getSentenceKeywords,
+  generateSentenceFrame,
 } from '../utils/hints';
 
 interface StudentPracticeViewProps {
@@ -51,11 +58,15 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
   const [isChecked, setIsChecked] = useState<boolean>(false);
   const [audioErrorMessage, setAudioErrorMessage] = useState<string | null>(null);
 
+  // Voice Accent & Speed with local persistence
+  const [voiceAccent, setVoiceAccent] = useState<'US' | 'UK'>(() => getStoredVoiceAccent());
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => getStoredPlaybackSpeed());
+
   // Retry Before Reveal state
   const [attemptCount, setAttemptCount] = useState<number>(0); // 0 = first try, 1 = after 1st try wrong, 2 = final
   const [isFirstAttemptIncorrect, setIsFirstAttemptIncorrect] = useState<boolean>(false);
 
-  // Hint Ladder state (0 = none, 1 = word count, 2 = first-letter pattern)
+  // 3-Tier Hint Ladder state (0 = none, 1 = first word, 2 = keywords, 3 = sentence frame)
   const [hintLevel, setHintLevel] = useState<number>(0);
   const [sentenceHintsUsed, setSentenceHintsUsed] = useState<number>(0);
 
@@ -71,8 +82,12 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
   // Student Voice Customization
   const [showAudioSettings, setShowAudioSettings] = useState<boolean>(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [studentVoiceMode, setStudentVoiceMode] = useState<'DEFAULT' | 'CUSTOM'>('DEFAULT');
-  const [studentSelectedVoiceURI, setStudentSelectedVoiceURI] = useState<string>('');
+  const [studentVoiceMode, setStudentVoiceMode] = useState<'DEFAULT' | 'CUSTOM'>(() => {
+    return getStoredVoiceURI() ? 'CUSTOM' : 'DEFAULT';
+  });
+  const [studentSelectedVoiceURI, setStudentSelectedVoiceURI] = useState<string>(() => {
+    return getStoredVoiceURI();
+  });
   const [isPlayingPreview, setIsPlayingPreview] = useState<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +103,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     const unsubscribe = subscribeToVoices((voices) => {
       const en = filterEnglishVoices(voices);
       setAvailableVoices(en);
-      if (en.length > 0 && !studentSelectedVoiceURI) {
+      const stored = getStoredVoiceURI();
+      if (stored && en.some((v) => v.voiceURI === stored)) {
+        setStudentSelectedVoiceURI(stored);
+      } else if (en.length > 0 && !studentSelectedVoiceURI) {
         setStudentSelectedVoiceURI(en[0].voiceURI);
       }
     });
@@ -100,6 +118,19 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     studentVoiceMode === 'CUSTOM'
       ? availableVoices.find((v) => v.voiceURI === studentSelectedVoiceURI) || null
       : null;
+
+  const handleSelectAccent = (accent: 'US' | 'UK') => {
+    setVoiceAccent(accent);
+    setStoredVoiceAccent(accent);
+    // Switch to default voice mode for the selected accent
+    setStudentVoiceMode('DEFAULT');
+    setStoredVoiceURI('');
+  };
+
+  const handleSelectSpeed = (speed: number) => {
+    setPlaybackSpeed(speed);
+    setStoredPlaybackSpeed(speed);
+  };
 
   // Reset state when moving to a new sentence (No automatic audio playback)
   useEffect(() => {
@@ -136,12 +167,14 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     audioPlayer.play({
       text: currentSentence.text,
       voice: activeStudentVoice || undefined,
-      voiceMode: activeStudentVoice ? undefined : exercise.voiceMode,
+      voiceMode: activeStudentVoice ? 'CUSTOM' : exercise.voiceMode,
       preferredVoiceName: activeStudentVoice ? undefined : exercise.preferredVoiceName,
-      preferredVoiceURI: activeStudentVoice ? undefined : exercise.preferredVoiceURI,
+      preferredVoiceURI: activeStudentVoice
+        ? undefined
+        : exercise.preferredVoiceURI || studentSelectedVoiceURI || undefined,
       preferredLang: activeStudentVoice ? undefined : exercise.preferredLang,
-      accent: exercise.voiceAccent,
-      speed: exercise.playbackSpeed || 0.95,
+      accent: activeStudentVoice ? voiceAccent : (exercise.voiceAccent || voiceAccent),
+      speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
       onStart: () => {
         setIsPlaying(true);
@@ -156,7 +189,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
           typeof err === 'string'
             ? err
             : err?.message ||
-                'Không thể phát giọng đọc trên thiết bị này. Hãy thử chọn một giọng khác trong ÂM THANH.'
+                'Thiết bị này chưa hỗ trợ giọng đọc. Vui lòng mở bằng Chrome hoặc Edge.'
         );
       },
     });
@@ -173,12 +206,9 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     audioPlayer.play({
       text: PREVIEW_SENTENCE,
       voice: activeStudentVoice || undefined,
-      voiceMode: activeStudentVoice ? undefined : exercise.voiceMode,
-      preferredVoiceName: activeStudentVoice ? undefined : exercise.preferredVoiceName,
-      preferredVoiceURI: activeStudentVoice ? undefined : exercise.preferredVoiceURI,
-      preferredLang: activeStudentVoice ? undefined : exercise.preferredLang,
-      accent: exercise.voiceAccent,
-      speed: exercise.playbackSpeed || 0.95,
+      preferredVoiceURI: activeStudentVoice ? undefined : studentSelectedVoiceURI || undefined,
+      accent: voiceAccent,
+      speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
       onStart: () => setIsPlayingPreview(true),
       onEnd: () => setIsPlayingPreview(false),
@@ -189,7 +219,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
   // Hint button clicked
   const handleUnlockHint = () => {
     if (isTestMode || !currentSentence) return;
-    if (hintLevel < 2) {
+    if (hintLevel < 3) {
       const nextLevel = hintLevel + 1;
       setHintLevel(nextLevel);
       setSentenceHintsUsed((prev) => prev + 1);
@@ -357,7 +387,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     preferredVoiceName: exercise.preferredVoiceName,
     preferredVoiceURI: exercise.preferredVoiceURI,
     preferredLang: exercise.preferredLang,
-    accent: exercise.voiceAccent,
+    accent: voiceAccent,
   });
 
   return (
@@ -413,6 +443,38 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
       <main className="w-full max-w-2xl mx-auto my-auto py-4 space-y-4">
         {/* Audio Listen Card */}
         <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200 text-center space-y-3.5">
+          {/* Voice selection: US / UK */}
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              id="btn-voice-us"
+              onClick={() => handleSelectAccent('US')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                voiceAccent === 'US'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+              title="Giọng chuẩn English US"
+            >
+              <span>🇺🇸</span>
+              <span>English US</span>
+            </button>
+            <button
+              type="button"
+              id="btn-voice-uk"
+              onClick={() => handleSelectAccent('UK')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                voiceAccent === 'UK'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+              title="Giọng chuẩn English UK"
+            >
+              <span>🇬🇧</span>
+              <span>English UK</span>
+            </button>
+          </div>
+
           {/* Big Audio Button */}
           <button
             id="btn-play-audio"
@@ -443,6 +505,26 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
               </span>
             )}
           </p>
+
+          {/* Playback speed selector: 0.75x, 0.9x, 1.0x */}
+          <div className="flex items-center justify-center gap-1.5 pt-1">
+            <span className="text-xs font-bold text-slate-400 mr-1">Tốc độ:</span>
+            {([0.75, 0.9, 1.0] as const).map((spd) => (
+              <button
+                key={spd}
+                type="button"
+                id={`btn-speed-${spd}`}
+                onClick={() => handleSelectSpeed(spd)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                  playbackSpeed === spd
+                    ? 'bg-indigo-100 text-indigo-800 border-indigo-300 font-black shadow-2xs'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+              >
+                {spd}×
+              </button>
+            ))}
+          </div>
 
           {/* Friendly Audio Error Alert */}
           {audioErrorMessage && (
@@ -524,55 +606,80 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                   type="button"
                   id="btn-hint-ladder"
                   onClick={handleUnlockHint}
-                  disabled={hintLevel >= 2}
+                  disabled={hintLevel >= 3}
                   className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     hintLevel === 0
                       ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300'
-                      : hintLevel === 1
-                      ? 'bg-amber-500 text-white shadow-xs'
+                      : hintLevel === 1 || hintLevel === 2
+                      ? 'bg-amber-500 text-white shadow-xs hover:bg-amber-600'
                       : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-default'
                   }`}
                   title={
                     hintLevel === 0
-                      ? 'Mở gợi ý số từ'
+                      ? 'Mở gợi ý 1: Từ đầu tiên'
                       : hintLevel === 1
-                      ? 'Mở gợi ý chữ cái đầu'
+                      ? 'Mở gợi ý 2: Từ khóa'
+                      : hintLevel === 2
+                      ? 'Mở gợi ý 3: Khung câu'
                       : 'Đã mở hết gợi ý'
                   }
                 >
                   <Lightbulb className="w-3.5 h-3.5 text-amber-600 fill-amber-400" />
                   <span>
                     {hintLevel === 0
-                      ? '💡 GỢI Ý'
+                      ? '💡 GỢI Ý 1'
                       : hintLevel === 1
                       ? '💡 GỢI Ý 2'
+                      : hintLevel === 2
+                      ? '💡 GỢI Ý 3'
                       : '💡 ĐÃ MỞ GỢI Ý'}
                   </span>
                 </button>
               )}
             </div>
 
-            {/* PROGRESSIVE HINT DISPLAY BOX */}
+            {/* PROGRESSIVE HINT DISPLAY BOX (3 Levels) */}
             {hintLevel > 0 && currentSentence && (
               <div
                 id="hint-ladder-box"
-                className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs sm:text-sm space-y-1.5 text-left animate-in fade-in"
+                className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs sm:text-sm space-y-2.5 text-left animate-in fade-in"
               >
+                {/* GỢI Ý 1: Từ đầu tiên */}
                 {hintLevel >= 1 && (
-                  <div className="font-bold text-amber-900 flex items-center space-x-1.5">
-                    <span className="text-base">📝</span>
-                    <span>Câu này có <strong>{getSentenceWordCount(currentSentence.text)}</strong> từ.</span>
+                  <div id="hint-level-1" className="font-bold text-amber-900 flex items-center space-x-2">
+                    <span className="text-base">💡</span>
+                    <span>
+                      Từ đầu tiên là:{' '}
+                      <strong className="text-indigo-900 font-black px-2 py-0.5 bg-white rounded-md border border-amber-300 shadow-2xs select-text">
+                        {getFirstWord(currentSentence.text)}
+                      </strong>
+                    </span>
                   </div>
                 )}
 
+                {/* GỢI Ý 2: Từ khóa */}
                 {hintLevel >= 2 && (
-                  <div className="pt-1 border-t border-amber-200/60 font-mono text-xs sm:text-sm font-black text-indigo-950 tracking-wider bg-white/80 p-2.5 rounded-xl border border-amber-300">
-                    <span className="text-[11px] font-sans font-bold text-slate-500 block mb-1">
-                      Chữ cái đầu mỗi từ:
-                    </span>
-                    <span className="text-indigo-700 select-none">
-                      {generateFirstLetterHint(currentSentence.text)}
-                    </span>
+                  <div id="hint-level-2" className="font-bold text-amber-900 flex items-start space-x-2 pt-2 border-t border-amber-200/60">
+                    <span className="text-base shrink-0">💡</span>
+                    <div className="flex-1">
+                      <span>Từ khóa:{' '}</span>
+                      <strong className="text-indigo-900 font-black px-2 py-0.5 bg-white rounded-md border border-amber-300 shadow-2xs select-text">
+                        {getSentenceKeywords(currentSentence.text).join(' – ')}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
+                {/* GỢI Ý 3: Khung câu */}
+                {hintLevel >= 3 && (
+                  <div id="hint-level-3" className="font-bold text-amber-900 space-y-1.5 pt-2 border-t border-amber-200/60">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-base">💡</span>
+                      <span>Khung câu:</span>
+                    </div>
+                    <div className="bg-white/95 p-2.5 rounded-xl border border-amber-300 font-mono text-xs sm:text-sm font-bold text-indigo-950 tracking-wide select-text">
+                      "{generateSentenceFrame(currentSentence.text)}"
+                    </div>
                   </div>
                 )}
               </div>
@@ -795,6 +902,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                       onChange={(e) => {
                         setStudentSelectedVoiceURI(e.target.value);
                         setStudentVoiceMode('CUSTOM');
+                        setStoredVoiceURI(e.target.value);
                       }}
                       className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >

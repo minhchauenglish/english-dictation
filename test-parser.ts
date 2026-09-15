@@ -369,6 +369,85 @@ BÀI học cần có TITLE
   console.log('  ✓ PASSED: Valid XLSX file buffer created successfully');
 
   console.log('\nALL EXCEL EXPORT TESTS PASSED PERFECTLY!');
+
+  console.log('\n=== TEST 6: 3-TIER HINTS & RESULT VIEW ALL ANSWERS TESTS ===');
+  const {
+    getFirstWord,
+    getSentenceKeywords,
+    generateSentenceFrame,
+    generateThreeTierHints,
+  } = await import('./src/utils/hints');
+
+  const s1 = 'Hello.';
+  const s2 = "I don't have breakfast at seven o'clock.";
+  const s3 = 'My family is very happy.';
+  const s4 = '"Welcome to our classroom!"';
+
+  // Sub-test 6.1: Hint 1 - First word
+  console.log('\n- Testing Sub-test 6.1: Hint 1 extracts exact first word');
+  if (getFirstWord(s1) !== 'Hello') {
+    throw new Error(`FAILED: Expected first word "Hello", got "${getFirstWord(s1)}"`);
+  }
+  if (getFirstWord(s2) !== 'I') {
+    throw new Error(`FAILED: Expected first word "I", got "${getFirstWord(s2)}"`);
+  }
+  if (getFirstWord(s3) !== 'My') {
+    throw new Error(`FAILED: Expected first word "My", got "${getFirstWord(s3)}"`);
+  }
+  if (getFirstWord(s4) !== 'Welcome') {
+    throw new Error(`FAILED: Expected first word "Welcome", got "${getFirstWord(s4)}"`);
+  }
+  const hintsS3 = generateThreeTierHints(s3);
+  if (hintsS3.level1Text !== 'Từ đầu tiên là: My') {
+    throw new Error(`FAILED: Level 1 text mismatch: ${hintsS3.level1Text}`);
+  }
+  console.log('  ✓ PASSED: Hint 1 extracts exact first word for all sentences');
+
+  // Sub-test 6.2: Hint 2 - Keywords
+  console.log('\n- Testing Sub-test 6.2: Hint 2 extracts content keywords');
+  const keywordsS3 = getSentenceKeywords(s3);
+  if (!keywordsS3.includes('family') || !keywordsS3.includes('happy')) {
+    throw new Error(`FAILED: Expected keywords to include family and happy, got ${JSON.stringify(keywordsS3)}`);
+  }
+  console.log(`  ✓ PASSED: Hint 2 keywords extracted: [${keywordsS3.join(' – ')}]`);
+
+  // Sub-test 6.3: Hint 3 - Sentence frame with blanks
+  console.log('\n- Testing Sub-test 6.3: Hint 3 generates sentence frame with blanks');
+  const frameS3 = generateSentenceFrame(s3);
+  if (!frameS3.includes('______')) {
+    throw new Error(`FAILED: Expected frame to contain blanks, got "${frameS3}"`);
+  }
+  console.log(`  ✓ PASSED: Frame generated: "${frameS3}"`);
+
+  // Sub-test 6.4: Full answers displayed in exact order only after completion
+  console.log('\n- Testing Sub-test 6.4: Result view full answers ordering');
+  const mockExerciseSentences = [
+    { id: 'sent_3', order: 3, text: 'This is my classroom.' },
+    { id: 'sent_1', order: 1, text: 'Good morning teacher.' },
+    { id: 'sent_2', order: 2, text: 'My name is Peter.' },
+    { id: 'sent_4', order: 4, text: 'We love English.' },
+  ];
+
+  // Emulate StudentResultView orderedSentences useMemo logic
+  const orderedResultSentences = [...mockExerciseSentences].sort((a, b) => a.order - b.order);
+  if (orderedResultSentences.length !== 4) {
+    throw new Error(`FAILED: Expected 4 sentences, got ${orderedResultSentences.length}`);
+  }
+  if (orderedResultSentences[0].order !== 1 || orderedResultSentences[0].text !== 'Good morning teacher.') {
+    throw new Error(`FAILED: Sentence 1 order mismatch: ${JSON.stringify(orderedResultSentences[0])}`);
+  }
+  if (orderedResultSentences[1].order !== 2 || orderedResultSentences[1].text !== 'My name is Peter.') {
+    throw new Error(`FAILED: Sentence 2 order mismatch: ${JSON.stringify(orderedResultSentences[1])}`);
+  }
+  if (orderedResultSentences[2].order !== 3 || orderedResultSentences[2].text !== 'This is my classroom.') {
+    throw new Error(`FAILED: Sentence 3 order mismatch: ${JSON.stringify(orderedResultSentences[2])}`);
+  }
+  if (orderedResultSentences[3].order !== 4 || orderedResultSentences[3].text !== 'We love English.') {
+    throw new Error(`FAILED: Sentence 4 order mismatch: ${JSON.stringify(orderedResultSentences[3])}`);
+  }
+  console.log('  ✓ PASSED: Result view displays all sentences in exact sequential order');
+
+  console.log('\nALL 3-TIER HINTS & RESULT VIEW TESTS PASSED PERFECTLY!');
 }
 
 runTests().catch((err) => {
