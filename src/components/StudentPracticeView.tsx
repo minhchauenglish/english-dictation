@@ -119,14 +119,14 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
       ? availableVoices.find((v) => v.voiceURI === studentSelectedVoiceURI) || null
       : null;
 
+  // Dedicated voice preference updater: ONLY updates voice accent & local storage
+  // Completely isolated from exercise session state
   const handleSelectAccent = (accent: 'US' | 'UK') => {
     setVoiceAccent(accent);
     setStoredVoiceAccent(accent);
-    // Switch to default voice mode for the selected accent
-    setStudentVoiceMode('DEFAULT');
-    setStoredVoiceURI('');
   };
 
+  // Dedicated speed preference updater: ONLY updates playback speed & local storage
   const handleSelectSpeed = (speed: number) => {
     setPlaybackSpeed(speed);
     setStoredPlaybackSpeed(speed);
@@ -164,16 +164,17 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     setIsPlaying(true);
     setReplaysUsed((prev) => prev + 1);
 
+    const customVoiceToUse =
+      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
+
     audioPlayer.play({
       text: currentSentence.text,
-      voice: activeStudentVoice || undefined,
-      voiceMode: activeStudentVoice ? 'CUSTOM' : exercise.voiceMode,
-      preferredVoiceName: activeStudentVoice ? undefined : exercise.preferredVoiceName,
-      preferredVoiceURI: activeStudentVoice
-        ? undefined
-        : exercise.preferredVoiceURI || studentSelectedVoiceURI || undefined,
-      preferredLang: activeStudentVoice ? undefined : exercise.preferredLang,
-      accent: activeStudentVoice ? voiceAccent : (exercise.voiceAccent || voiceAccent),
+      voice: customVoiceToUse || undefined,
+      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : exercise.preferredVoiceURI,
+      preferredVoiceName: customVoiceToUse ? customVoiceToUse.name : exercise.preferredVoiceName,
+      preferredLang: exercise.preferredLang,
+      voiceMode: exercise.voiceMode,
+      accent: voiceAccent,
       speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
       onStart: () => {
@@ -203,10 +204,13 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     }
 
     setIsPlayingPreview(true);
+    const customVoiceToUse =
+      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
+
     audioPlayer.play({
       text: PREVIEW_SENTENCE,
-      voice: activeStudentVoice || undefined,
-      preferredVoiceURI: activeStudentVoice ? undefined : studentSelectedVoiceURI || undefined,
+      voice: customVoiceToUse || undefined,
+      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : undefined,
       accent: voiceAccent,
       speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
@@ -448,7 +452,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
             <button
               type="button"
               id="btn-voice-us"
-              onClick={() => handleSelectAccent('US')}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSelectAccent('US');
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
                 voiceAccent === 'US'
                   ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
@@ -462,7 +469,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
             <button
               type="button"
               id="btn-voice-uk"
-              onClick={() => handleSelectAccent('UK')}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSelectAccent('UK');
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
                 voiceAccent === 'UK'
                   ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
@@ -786,15 +796,14 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                   type="button"
                   title="Nghe lại câu đúng"
                   onClick={() => {
+                    const customVoiceToUse =
+                      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
                     audioPlayer.play({
                       text: currentSentence?.text || '',
-                      voice: activeStudentVoice || undefined,
-                      voiceMode: activeStudentVoice ? undefined : exercise.voiceMode,
-                      preferredVoiceName: activeStudentVoice ? undefined : exercise.preferredVoiceName,
-                      preferredVoiceURI: activeStudentVoice ? undefined : exercise.preferredVoiceURI,
-                      preferredLang: activeStudentVoice ? undefined : exercise.preferredLang,
-                      accent: exercise.voiceAccent,
-                      speed: exercise.playbackSpeed || 0.9,
+                      voice: customVoiceToUse || undefined,
+                      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : undefined,
+                      accent: voiceAccent,
+                      speed: playbackSpeed,
                       pitch: exercise.pitch ?? 1.0,
                     });
                   }}
@@ -900,9 +909,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                       value={studentSelectedVoiceURI}
                       disabled={studentVoiceMode !== 'CUSTOM'}
                       onChange={(e) => {
-                        setStudentSelectedVoiceURI(e.target.value);
+                        const val = e.target.value;
+                        setStudentSelectedVoiceURI(val);
                         setStudentVoiceMode('CUSTOM');
-                        setStoredVoiceURI(e.target.value);
+                        setStoredVoiceURI(val);
                       }}
                       className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >

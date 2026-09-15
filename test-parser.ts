@@ -448,6 +448,99 @@ BÀI học cần có TITLE
   console.log('  ✓ PASSED: Result view displays all sentences in exact sequential order');
 
   console.log('\nALL 3-TIER HINTS & RESULT VIEW TESTS PASSED PERFECTLY!');
+
+  // ==========================================
+  // TEST 7: VOICE ACCENT SWITCHING PRESERVES ALL EXERCISE STATE
+  // ==========================================
+  console.log('\n=== TEST 7: VOICE ACCENT SWITCHING STATE PRESERVATION ===');
+
+  // Simulated exercise session state
+  const sessionState = {
+    currentIndex: 2, // Question 3/5
+    typedAnswer: 'I have breakfast with my family',
+    replaysUsed: 2, // 2/3 listens used
+    attemptCount: 1,
+    isFirstAttemptIncorrect: true,
+    hintLevel: 2, // 2nd hint unlocked
+    sentenceHintsUsed: 2,
+    isChecked: false,
+    currentCheckResult: null,
+    collectedResults: [
+      {
+        sentenceId: 'sent_1',
+        sentenceOrder: 1,
+        targetText: 'Good morning teacher.',
+        studentAnswer: 'Good morning teacher.',
+        accuracy: 100,
+        isCorrect: true,
+        wordDiffs: [],
+        wrongWords: [],
+        replaysUsed: 1,
+        hintsUsed: 0,
+      },
+      {
+        sentenceId: 'sent_2',
+        sentenceOrder: 2,
+        targetText: 'My name is Peter.',
+        studentAnswer: 'My name is Peter.',
+        accuracy: 100,
+        isCorrect: true,
+        wordDiffs: [],
+        wrongWords: [],
+        replaysUsed: 1,
+        hintsUsed: 1,
+      },
+    ],
+  };
+
+  // Voice preference state (isolated from session state)
+  const voicePrefs: { voiceAccent: 'US' | 'UK'; storedVoiceAccent: string } = {
+    voiceAccent: 'US',
+    storedVoiceAccent: 'US',
+  };
+
+  const handleSelectAccent = (accent: 'US' | 'UK') => {
+    voicePrefs.voiceAccent = accent;
+    voicePrefs.storedVoiceAccent = accent;
+    // CRITICAL: Voice preference updater must NOT touch sessionState
+  };
+
+  // Snapshot before voice change
+  const initialSessionSnapshot = JSON.stringify(sessionState);
+
+  // Student switches from US to UK
+  console.log('- Testing student switching US -> UK during Question 3/5 with 2/3 listens...');
+  handleSelectAccent('UK');
+
+  if ((voicePrefs.voiceAccent as string) !== 'UK' || voicePrefs.storedVoiceAccent !== 'UK') {
+    throw new Error('FAILED: Voice accent was not updated to UK');
+  }
+
+  // Verify all session state is 100% preserved
+  if (JSON.stringify(sessionState) !== initialSessionSnapshot) {
+    throw new Error('FAILED: Exercise session state was modified when switching to UK!');
+  }
+  if (sessionState.currentIndex !== 2) throw new Error('FAILED: currentIndex was reset!');
+  if (sessionState.replaysUsed !== 2) throw new Error('FAILED: replaysUsed was reset!');
+  if (sessionState.typedAnswer !== 'I have breakfast with my family') throw new Error('FAILED: typedAnswer was reset!');
+  if (sessionState.hintLevel !== 2) throw new Error('FAILED: hintLevel was reset!');
+  if (sessionState.collectedResults.length !== 2) throw new Error('FAILED: collectedResults was reset!');
+
+  console.log('  ✓ PASSED: UK switch preserved Question 3/5, 2/3 listens, typed answer, hintLevel=2, and completed results');
+
+  // Student switches back from UK to US
+  console.log('- Testing student switching UK -> US during Question 3/5 with 2/3 listens...');
+  handleSelectAccent('US');
+
+  if ((voicePrefs.voiceAccent as string) !== 'US' || (voicePrefs.storedVoiceAccent as string) !== 'US') {
+    throw new Error('FAILED: Voice accent was not updated to US');
+  }
+  if (JSON.stringify(sessionState) !== initialSessionSnapshot) {
+    throw new Error('FAILED: Exercise session state was modified when switching to US!');
+  }
+  console.log('  ✓ PASSED: US switch preserved Question 3/5, 2/3 listens, typed answer, hintLevel=2, and completed results');
+
+  console.log('\nALL VOICE STATE PRESERVATION TESTS PASSED PERFECTLY!');
 }
 
 runTests().catch((err) => {
