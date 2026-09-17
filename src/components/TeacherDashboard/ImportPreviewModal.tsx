@@ -111,6 +111,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     wordsText: string;
     sentencesText: string;
     paragraphText: string;
+    translationText: string;
   } | null>(null);
 
   // Current daily schedule assignments mapping (classId -> dictationId)
@@ -212,6 +213,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
       wordsText: l.words.join('\n'),
       sentencesText: l.sentences.join('\n'),
       paragraphText: l.paragraph || '',
+      translationText: l.translation || '',
     });
   };
 
@@ -246,6 +248,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
           words: newWords,
           sentences: newSentences,
           paragraph: editForm.paragraphText.trim() || undefined,
+          translation: editForm.translationText.trim() || undefined,
           validationError: hasContent ? undefined : 'Lesson has no content.',
           selected: hasContent,
         };
@@ -664,6 +667,11 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
                         {item.detectedClass && (
                           <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
                             Lớp: {item.detectedClass}
+                          </span>
+                        )}
+                        {item.translation && (
+                          <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 text-xs font-semibold">
+                            🇻🇳 Có bản dịch
                           </span>
                         )}
                       </div>
@@ -1180,6 +1188,23 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
                   />
                 </div>
               )}
+
+              {/* Translation Field (Optional) */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                  <span>Bản dịch tiếng Việt (TRANSLATION - tùy chọn):</span>
+                  <span className="text-2xs font-normal text-slate-400">Đánh số 1. 2. hoặc cả đoạn văn</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.translationText}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, translationText: e.target.value })
+                  }
+                  placeholder="1. Xin chào các bạn.&#10;2. Đây là trường học của tôi."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
             </div>
 
             <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2 shrink-0">

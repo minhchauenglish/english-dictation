@@ -21,6 +21,7 @@ export interface DictationSentence {
 export interface DictationExercise {
   title: string;
   sentences: DictationSentence[];
+  translation?: string; // Vietnamese translation of the exercise/lesson
   exerciseMode?: ExerciseMode; // 'PRACTICE' (default) | 'TEST'
   voiceMode?: VoiceMode; // 'NATURAL' | 'US' | 'UK' | 'CUSTOM'
   voiceAccent: VoiceAccent; // 'US' | 'UK' (fallback accent)
@@ -29,7 +30,7 @@ export interface DictationExercise {
   preferredLang?: string; // e.g. "en-US", "en-GB"
   pitch?: VoicePitch; // 0.9 | 1.0 | 1.05 | 1.1 (default 1.0)
   playbackSpeed: PlaybackSpeed; // 0.75 | 0.85 | 0.9 | 0.95 | 1.0 | 1.15 (default 0.9)
-  listenLimit: ListenLimit; // 0 (unlimited), 1, 2, 3
+  listenLimit?: ListenLimit; // Optional for backward compatibility, all listening is unlimited
   checkMode: CheckMode; // 'EASY' | 'STRICT'
   createdAt?: string;
 }
@@ -74,6 +75,7 @@ export interface SavedDictationItem {
   classIds?: string[]; // Danh sách classId các lớp được gán (e.g. ['c1', 'c2'])
   topic: string; // e.g. "Unit 4: My Family", "Daily Routine"
   passage: string; // raw input passage
+  translation?: string; // Vietnamese translation
   exercise: DictationExercise;
   createdAt: string;
   updatedAt: string;

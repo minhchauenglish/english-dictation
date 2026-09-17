@@ -43,6 +43,11 @@ This is my school.
 My teacher is nice.
 I love my classroom.
 
+TRANSLATION:
+Đây là ngôi trường của em.
+Cô giáo của em rất hiền.
+Em rất yêu quý lớp học của mình.
+
 ========================================
 
 Lesson 4 – MY PET
@@ -59,6 +64,8 @@ I have a cat.
 My cat is small.
 I love my cat.
 
+TRANSLATION: Em có một chú mèo con đáng yêu.
+
 ========================================
 
 HƯỚNG DẪN SOẠN BÀI:
@@ -66,7 +73,8 @@ LESSON từ/câu đơn giản dùng CONTENT
 LESSON và TITLE phải có trong mỗi bài
 LESSON phải có nội dung
 UNIT và CONTENT có thể dùng thay thế
-BÀI học cần có TITLE`;
+BÀI học cần có TITLE
+TRANSLATION: Bản dịch tiếng Việt bài học (không bắt buộc)`;
 
 /**
  * Downloads the sample Word template file.

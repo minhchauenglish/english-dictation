@@ -116,9 +116,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               <span className="bg-white px-2 py-1 rounded-md border border-slate-200 font-semibold">
                 🎯 {exercise.checkMode === 'EASY' ? 'Chế độ Dễ' : 'Chính xác'}
               </span>
-              <span className="bg-white px-2 py-1 rounded-md border border-slate-200 font-semibold">
-                🔁 {exercise.listenLimit === 0 ? 'Nghe không giới hạn' : `Nghe tối đa ${exercise.listenLimit} lần`}
-              </span>
             </div>
           </div>
 

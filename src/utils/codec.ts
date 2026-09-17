@@ -4,6 +4,7 @@ import { DictationExercise, PlaybackSpeed, VoiceMode, VoicePitch } from '../type
 interface MinifiedExercisePayload {
   t: string; // title
   s: string[]; // sentences
+  tr?: string; // translation (Vietnamese)
   em?: 'practice' | 'test'; // exercise mode ('practice' | 'test')
   v?: 'US' | 'UK'; // fallback voice accent
   vm?: VoiceMode; // voice mode ('NATURAL' | 'US' | 'UK' | 'CUSTOM')
@@ -26,6 +27,7 @@ export function encodeExercise(exercise: DictationExercise): string {
   const minified: MinifiedExercisePayload = {
     t: exercise.title.trim(),
     s: exercise.sentences.map((s) => s.text.trim()).filter(Boolean),
+    tr: exercise.translation ? exercise.translation.trim() : undefined,
     em: exercise.exerciseMode === 'TEST' ? 'test' : 'practice',
     v: exercise.voiceAccent || 'US',
     vm: exercise.voiceMode || 'NATURAL',
@@ -34,7 +36,6 @@ export function encodeExercise(exercise: DictationExercise): string {
     vl: exercise.preferredLang,
     p: exercise.pitch ?? 1.0,
     r: exercise.playbackSpeed || 0.95,
-    l: exercise.listenLimit ?? 3,
     m: exercise.checkMode || 'EASY',
   };
 
@@ -92,6 +93,7 @@ function parsePayload(parsed: any): DictationExercise | null {
         order: idx + 1,
         text: String(text).trim(),
       })),
+      translation: parsed.tr ? String(parsed.tr).trim() : undefined,
       exerciseMode,
       voiceMode,
       voiceAccent: parsed.v === 'UK' ? 'UK' : 'US',
@@ -100,7 +102,7 @@ function parsePayload(parsed: any): DictationExercise | null {
       preferredLang: parsed.vl || undefined,
       pitch,
       playbackSpeed: speed,
-      listenLimit: (parsed.l === 0 || parsed.l === 1 || parsed.l === 2 || parsed.l === 3) ? parsed.l : 3,
+      listenLimit: 0,
       checkMode: parsed.m === 'STRICT' ? 'STRICT' : 'EASY',
     };
   }
@@ -114,6 +116,7 @@ function parsePayload(parsed: any): DictationExercise | null {
         order: item.order || idx + 1,
         text: typeof item === 'string' ? item.trim() : (item.text || '').trim(),
       })),
+      translation: parsed.translation ? String(parsed.translation).trim() : (parsed.tr ? String(parsed.tr).trim() : undefined),
       exerciseMode: parsed.exerciseMode === 'TEST' ? 'TEST' : 'PRACTICE',
       voiceMode: parsed.voiceMode || (parsed.voiceAccent === 'UK' ? 'UK' : 'NATURAL'),
       voiceAccent: parsed.voiceAccent === 'UK' ? 'UK' : 'US',
@@ -122,7 +125,7 @@ function parsePayload(parsed: any): DictationExercise | null {
       preferredLang: parsed.preferredLang,
       pitch: VALID_PITCHES.includes(parsed.pitch) ? parsed.pitch : 1.0,
       playbackSpeed: VALID_SPEEDS.includes(parsed.playbackSpeed) ? parsed.playbackSpeed : 0.95,
-      listenLimit: parsed.listenLimit ?? 3,
+      listenLimit: 0,
       checkMode: parsed.checkMode === 'STRICT' ? 'STRICT' : 'EASY',
     };
   }

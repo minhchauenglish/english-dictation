@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Volume2,
   RotateCcw,
@@ -12,6 +12,9 @@ import {
   HelpCircle,
   Sparkles,
   AlertCircle,
+  Eye,
+  EyeOff,
+  Layers,
 } from 'lucide-react';
 import {
   DictationExercise,
@@ -37,6 +40,8 @@ import {
   getSentenceKeywords,
   generateSentenceFrame,
 } from '../utils/hints';
+import { splitSentenceIntoChunks, SentenceChunk } from '../utils/chunking';
+import { getSentenceTranslation } from '../utils/translationHelper';
 
 interface StudentPracticeViewProps {
   exercise: DictationExercise;
@@ -95,8 +100,29 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
   const isTestMode = exercise.exerciseMode === 'TEST';
   const currentSentence = exercise.sentences[currentIndex];
   const totalSentences = exercise.sentences.length;
-  const listenLimit = exercise.listenLimit ?? 3; // 0 = unlimited, 1, 2, 3
-  const isLimitReached = listenLimit > 0 && replaysUsed >= listenLimit;
+
+  // Listening Mode: Full Sentence vs Natural Chunks
+  const [listenMode, setListenMode] = useState<'FULL' | 'CHUNKS'>('FULL');
+  const [playingChunkIndex, setPlayingChunkIndex] = useState<number | null>(null);
+
+  // Translation display toggle (default: hidden)
+  const [showTranslation, setShowTranslation] = useState<boolean>(false);
+
+  // Natural chunks for current sentence
+  const sentenceChunks = useMemo(() => {
+    if (!currentSentence?.text) return [];
+    return splitSentenceIntoChunks(currentSentence.text);
+  }, [currentSentence?.text]);
+
+  const sentenceWordCount = useMemo(() => {
+    if (!currentSentence?.text) return 0;
+    return currentSentence.text.trim().split(/\s+/).filter(Boolean).length;
+  }, [currentSentence?.text]);
+
+  // Vietnamese translation extraction for current sentence
+  const translationInfo = useMemo(() => {
+    return getSentenceTranslation(exercise.translation, currentIndex, totalSentences);
+  }, [exercise.translation, currentIndex, totalSentences]);
 
   // Listen to browser voices on student device
   useEffect(() => {
@@ -118,6 +144,37 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     studentVoiceMode === 'CUSTOM'
       ? availableVoices.find((v) => v.voiceURI === studentSelectedVoiceURI) || null
       : null;
+
+  // Resolved active voice using priority:
+  // 1. If studentVoiceMode === 'CUSTOM' and valid activeStudentVoice exists: use student's custom voice
+  // 2. Otherwise use exercise voice configuration (voiceMode, preferredVoiceName, preferredVoiceURI, preferredLang, voiceAccent)
+  // 3. If exercise voice cannot be resolved on student's device, gracefully fall back to existing accent-based voice resolution
+  const resolvedEffectiveVoice = useMemo(() => {
+    // Priority 1: Custom student voice
+    if (studentVoiceMode === 'CUSTOM' && activeStudentVoice) {
+      return activeStudentVoice;
+    }
+
+    // Priority 2 & 3: Exercise voice configuration with fallback to accent
+    const fallbackAccent = voiceAccent || exercise.voiceAccent || 'US';
+    return resolveVoice({
+      voiceMode: exercise.voiceMode,
+      preferredVoiceName: exercise.preferredVoiceName,
+      preferredVoiceURI: exercise.preferredVoiceURI,
+      preferredLang: exercise.preferredLang,
+      accent: fallbackAccent,
+    });
+  }, [
+    studentVoiceMode,
+    activeStudentVoice,
+    exercise.voiceMode,
+    exercise.preferredVoiceName,
+    exercise.preferredVoiceURI,
+    exercise.preferredLang,
+    exercise.voiceAccent,
+    voiceAccent,
+    availableVoices,
+  ]);
 
   // Dedicated voice preference updater: ONLY updates voice accent & local storage
   // Completely isolated from exercise session state
@@ -143,6 +200,9 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     setCurrentCheckResult(null);
     setReplaysUsed(0);
     setIsPlaying(false);
+    setPlayingChunkIndex(null);
+    setShowTranslation(false);
+    setListenMode('FULL');
     setAudioErrorMessage(null);
 
     audioPlayer.stop();
@@ -155,8 +215,9 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     }
   }, [currentIndex, isChecked, isFirstAttemptIncorrect]);
 
+  // UNLIMITED FULL-SENTENCE PLAYBACK
   const handlePlayAudio = () => {
-    if (!currentSentence || (listenLimit > 0 && replaysUsed >= listenLimit)) {
+    if (!currentSentence) {
       return;
     }
 
@@ -164,16 +225,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     setIsPlaying(true);
     setReplaysUsed((prev) => prev + 1);
 
-    const customVoiceToUse =
-      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
-
     audioPlayer.play({
       text: currentSentence.text,
-      voice: customVoiceToUse || undefined,
-      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : exercise.preferredVoiceURI,
-      preferredVoiceName: customVoiceToUse ? customVoiceToUse.name : exercise.preferredVoiceName,
-      preferredLang: exercise.preferredLang,
-      voiceMode: exercise.voiceMode,
+      voice: resolvedEffectiveVoice || undefined,
+      preferredVoiceURI: resolvedEffectiveVoice ? resolvedEffectiveVoice.voiceURI : undefined,
       accent: voiceAccent,
       speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
@@ -184,13 +239,37 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
       onEnd: () => setIsPlaying(false),
       onError: (err: any) => {
         setIsPlaying(false);
-        // Do not count failed technical playback attempt as an additional listening attempt
-        setReplaysUsed((prev) => Math.max(0, prev - 1));
         setAudioErrorMessage(
           typeof err === 'string'
             ? err
             : err?.message ||
                 'Thiết bị này chưa hỗ trợ giọng đọc. Vui lòng mở bằng Chrome hoặc Edge.'
+        );
+      },
+    });
+  };
+
+  // UNLIMITED CHUNK PLAYBACK (Does not reset exercise or count toward limits)
+  const handlePlayChunk = (chunk: SentenceChunk) => {
+    audioPlayer.stop();
+    setAudioErrorMessage(null);
+    setPlayingChunkIndex(chunk.index);
+
+    audioPlayer.play({
+      text: chunk.text,
+      voice: resolvedEffectiveVoice || undefined,
+      preferredVoiceURI: resolvedEffectiveVoice ? resolvedEffectiveVoice.voiceURI : undefined,
+      accent: voiceAccent,
+      speed: playbackSpeed,
+      pitch: exercise.pitch ?? 1.0,
+      onStart: () => setPlayingChunkIndex(chunk.index),
+      onEnd: () => setPlayingChunkIndex(null),
+      onError: (err: any) => {
+        setPlayingChunkIndex(null);
+        setAudioErrorMessage(
+          typeof err === 'string'
+            ? err
+            : err?.message || 'Thiết bị chưa thể phát âm thanh cho cụm này.'
         );
       },
     });
@@ -204,13 +283,11 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
     }
 
     setIsPlayingPreview(true);
-    const customVoiceToUse =
-      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
 
     audioPlayer.play({
       text: PREVIEW_SENTENCE,
-      voice: customVoiceToUse || undefined,
-      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : undefined,
+      voice: resolvedEffectiveVoice || undefined,
+      preferredVoiceURI: resolvedEffectiveVoice ? resolvedEffectiveVoice.voiceURI : undefined,
       accent: voiceAccent,
       speed: playbackSpeed,
       pitch: exercise.pitch ?? 1.0,
@@ -446,95 +523,251 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
       {/* Center Interactive Practice Area */}
       <main className="w-full max-w-2xl mx-auto my-auto py-4 space-y-4">
         {/* Audio Listen Card */}
-        <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200 text-center space-y-3.5">
-          {/* Voice selection: US / UK */}
-          <div className="flex items-center justify-center gap-2">
+        <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200 text-center space-y-4">
+          {/* Top Controls Bar: Voice selection (US/UK) & Speed selector */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            {/* Voice selection: US / UK */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="btn-voice-us"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSelectAccent('US');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                  voiceAccent === 'US'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+                title="Giọng chuẩn English US"
+              >
+                <span>🇺🇸</span>
+                <span>US</span>
+              </button>
+              <button
+                type="button"
+                id="btn-voice-uk"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSelectAccent('UK');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                  voiceAccent === 'UK'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+                title="Giọng chuẩn English UK"
+              >
+                <span>🇬🇧</span>
+                <span>UK</span>
+              </button>
+            </div>
+
+            {/* Playback speed selector: 0.75x, 0.9x, 1.0x */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] font-bold text-slate-400 mr-0.5">Tốc độ:</span>
+              {([0.75, 0.9, 1.0] as const).map((spd) => (
+                <button
+                  key={spd}
+                  type="button"
+                  id={`btn-speed-${spd}`}
+                  onClick={() => handleSelectSpeed(spd)}
+                  className={`px-2 py-1 rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                    playbackSpeed === spd
+                      ? 'bg-indigo-100 text-indigo-800 border-indigo-300 font-black shadow-2xs'
+                      : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  {spd}×
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* TWO LISTENING MODES SELECTOR:
+              1. 🔊 NGHE CẢ CÂU
+              2. 🧩 NGHE TỪNG CỤM
+          */}
+          <div className="flex items-center justify-center gap-2 pt-1">
             <button
               type="button"
-              id="btn-voice-us"
-              onClick={(e) => {
-                e.preventDefault();
-                handleSelectAccent('US');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
-                voiceAccent === 'US'
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+              id="btn-mode-full-sentence"
+              onClick={() => setListenMode('FULL')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all border flex items-center space-x-1.5 cursor-pointer ${
+                listenMode === 'FULL'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-100'
                   : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
-              title="Giọng chuẩn English US"
             >
-              <span>🇺🇸</span>
-              <span>English US</span>
+              <Volume2 className="w-4 h-4" />
+              <span>🔊 NGHE CẢ CÂU</span>
             </button>
+
             <button
               type="button"
-              id="btn-voice-uk"
-              onClick={(e) => {
-                e.preventDefault();
-                handleSelectAccent('UK');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center space-x-1.5 ${
-                voiceAccent === 'UK'
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+              id="btn-mode-chunk-listening"
+              onClick={() => setListenMode('CHUNKS')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all border flex items-center space-x-1.5 cursor-pointer relative ${
+                listenMode === 'CHUNKS'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-100'
+                  : sentenceWordCount > 14
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-black'
                   : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
-              title="Giọng chuẩn English UK"
             >
-              <span>🇬🇧</span>
-              <span>English UK</span>
+              <Layers className="w-4 h-4" />
+              <span>🧩 NGHE TỪNG CỤM</span>
+              {sentenceChunks.length > 1 && (
+                <span
+                  className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                    listenMode === 'CHUNKS'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-indigo-100 text-indigo-800'
+                  }`}
+                >
+                  {sentenceChunks.length} cụm
+                </span>
+              )}
             </button>
           </div>
 
-          {/* Big Audio Button */}
-          <button
-            id="btn-play-audio"
-            onClick={handlePlayAudio}
-            disabled={isLimitReached && !isPlaying}
-            className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto flex flex-col items-center justify-center space-y-1 transition-all shadow-md active:scale-95 cursor-pointer ${
-              isPlaying
-                ? 'bg-amber-500 text-white ring-8 ring-amber-100 animate-pulse'
-                : isLimitReached
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white ring-8 ring-indigo-50 hover:ring-indigo-100'
-            }`}
-          >
-            <Volume2 className={`w-10 h-10 sm:w-12 sm:h-12 ${isPlaying ? 'animate-bounce' : ''}`} />
-            <span className="font-extrabold text-sm sm:text-base uppercase tracking-wider">
-              {isPlaying ? 'Đang đọc' : 'NGHE'}
-            </span>
-          </button>
-
-          {/* Listen Limit Counter */}
-          <p id="listen-limit-counter" className="text-xs sm:text-sm font-semibold text-slate-500">
-            {listenLimit === 0 ? (
-              <span className="text-emerald-600">Lượt nghe: {replaysUsed} (Không giới hạn)</span>
-            ) : (
-              <span>
-                Lượt nghe: <span className="font-bold text-slate-800">{replaysUsed}</span> / {listenLimit}
-                {isLimitReached && <span className="text-rose-600 font-bold ml-1.5">(Đã hết lượt nghe)</span>}
-              </span>
-            )}
-          </p>
-
-          {/* Playback speed selector: 0.75x, 0.9x, 1.0x */}
-          <div className="flex items-center justify-center gap-1.5 pt-1">
-            <span className="text-xs font-bold text-slate-400 mr-1">Tốc độ:</span>
-            {([0.75, 0.9, 1.0] as const).map((spd) => (
+          {/* Prominent hint for sentences with > 14 words */}
+          {sentenceWordCount > 14 && listenMode === 'FULL' && (
+            <div className="p-2 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-center space-x-1.5">
+              <span>💡 Câu này khá dài. Em có thể chuyển sang</span>
               <button
-                key={spd}
                 type="button"
-                id={`btn-speed-${spd}`}
-                onClick={() => handleSelectSpeed(spd)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all cursor-pointer border ${
-                  playbackSpeed === spd
-                    ? 'bg-indigo-100 text-indigo-800 border-indigo-300 font-black shadow-2xs'
-                    : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'
+                onClick={() => setListenMode('CHUNKS')}
+                className="font-bold underline text-amber-950 cursor-pointer hover:text-indigo-600"
+              >
+                🧩 NGHE TỪNG CỤM
+              </button>
+              <span>để nghe dễ hơn!</span>
+            </div>
+          )}
+
+          {/* MODE 1: FULL SENTENCE LISTENING */}
+          {listenMode === 'FULL' ? (
+            <div className="py-2 space-y-3">
+              {/* Big Audio Button */}
+              <button
+                id="btn-play-audio"
+                onClick={handlePlayAudio}
+                className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto flex flex-col items-center justify-center space-y-1 transition-all shadow-md active:scale-95 cursor-pointer ${
+                  isPlaying
+                    ? 'bg-amber-500 text-white ring-8 ring-amber-100 animate-pulse'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white ring-8 ring-indigo-50 hover:ring-indigo-100'
                 }`}
               >
-                {spd}×
+                <Volume2 className={`w-10 h-10 sm:w-12 sm:h-12 ${isPlaying ? 'animate-bounce' : ''}`} />
+                <span className="font-extrabold text-sm sm:text-base uppercase tracking-wider">
+                  {isPlaying ? 'Đang đọc' : 'NGHE'}
+                </span>
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            /* MODE 2: CHUNK LISTENING (AUDIO ONLY - NEVER REVEALS TEXT) */
+            <div id="chunk-listening-container" className="space-y-3 py-2 text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-indigo-700 flex items-center space-x-1.5">
+                  <Layers className="w-4 h-4" />
+                  <span>Các cụm tự nhiên ({sentenceChunks.length} cụm):</span>
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-600">
+                  ♾️ Nghe lại từng cụm thoải mái
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {sentenceChunks.map((chunk) => (
+                  <div
+                    key={chunk.index}
+                    id={`chunk-item-${chunk.index + 1}`}
+                    className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      playingChunkIndex === chunk.index
+                        ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-100'
+                        : 'bg-slate-50 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-extrabold uppercase px-3 py-1.5 rounded-xl bg-indigo-100 text-indigo-800 border border-indigo-200/70">
+                        CỤM {chunk.index + 1}/{chunk.total}
+                      </span>
+                      {playingChunkIndex === chunk.index && (
+                        <span className="text-xs font-bold text-amber-600 animate-pulse flex items-center space-x-1">
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>Đang đọc...</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      id={`btn-play-chunk-${chunk.index + 1}`}
+                      onClick={() => handlePlayChunk(chunk)}
+                      className={`min-h-[44px] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer shrink-0 shadow-xs active:scale-95 ${
+                        playingChunkIndex === chunk.index
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
+                    >
+                      <Volume2 className="w-4 h-4 shrink-0" />
+                      <span>{playingChunkIndex === chunk.index ? 'Đang đọc...' : '🔊 NGHE CỤM'}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Full sentence listen fallback button */}
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  id="btn-chunk-mode-play-full"
+                  onClick={handlePlayAudio}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold flex items-center space-x-1.5 border border-slate-200 cursor-pointer active:scale-95"
+                >
+                  <Volume2 className="w-4 h-4 text-indigo-600" />
+                  <span>🔊 Nghe toàn bộ câu</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VIETNAMESE TRANSLATION TOGGLE (PART 3) */}
+          {translationInfo.hasTranslation && (
+            <div className="pt-2 border-t border-slate-100 space-y-2.5">
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  id="btn-toggle-translation"
+                  onClick={() => setShowTranslation((prev) => !prev)}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all border flex items-center space-x-1.5 cursor-pointer active:scale-95 shadow-2xs ${
+                    showTranslation
+                      ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-100'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}
+                >
+                  {showTranslation ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{showTranslation ? '👁 ẨN BẢN DỊCH' : '🇻🇳 XEM BẢN DỊCH'}</span>
+                </button>
+              </div>
+
+              {showTranslation && (
+                <div
+                  id="translation-display-card"
+                  className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-emerald-950 text-left animate-in fade-in zoom-in-95 space-y-1"
+                >
+                  <div className="flex items-center space-x-1.5 text-xs font-black uppercase tracking-wider text-emerald-800">
+                    <span>🇻🇳 Bản dịch tiếng Việt:</span>
+                  </div>
+                  <p className="text-sm sm:text-base font-semibold text-emerald-950 leading-relaxed select-text">
+                    {translationInfo.sentenceTranslation}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Friendly Audio Error Alert */}
           {audioErrorMessage && (
@@ -581,8 +814,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                     type="button"
                     id="btn-retry-listen"
                     onClick={handlePlayAudio}
-                    disabled={isLimitReached}
-                    className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer active:scale-95"
+                    className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer active:scale-95"
                   >
                     <Volume2 className="w-4 h-4" />
                     <span>🔊 NGHE LẠI</span>
@@ -721,8 +953,7 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                 type="button"
                 id="btn-replay-audio"
                 onClick={handlePlayAudio}
-                disabled={isLimitReached}
-                className="min-h-[48px] py-3.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 font-bold text-base transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                className="min-h-[48px] py-3.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base transition-all flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <RotateCcw className="w-5 h-5 text-indigo-600" />
                 <span>NGHE LẠI</span>
@@ -796,12 +1027,10 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                   type="button"
                   title="Nghe lại câu đúng"
                   onClick={() => {
-                    const customVoiceToUse =
-                      studentVoiceMode === 'CUSTOM' ? activeStudentVoice : null;
                     audioPlayer.play({
                       text: currentSentence?.text || '',
-                      voice: customVoiceToUse || undefined,
-                      preferredVoiceURI: customVoiceToUse ? customVoiceToUse.voiceURI : undefined,
+                      voice: resolvedEffectiveVoice || undefined,
+                      preferredVoiceURI: resolvedEffectiveVoice ? resolvedEffectiveVoice.voiceURI : undefined,
                       accent: voiceAccent,
                       speed: playbackSpeed,
                       pitch: exercise.pitch ?? 1.0,
@@ -812,6 +1041,14 @@ export const StudentPracticeView: React.FC<StudentPracticeViewProps> = ({
                   <Volume2 className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Translation in feedback card if available */}
+              {translationInfo.hasTranslation && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm font-semibold flex items-center space-x-2">
+                  <span className="shrink-0 font-black">🇻🇳 Dịch:</span>
+                  <span className="select-text">{translationInfo.sentenceTranslation}</span>
+                </div>
+              )}
             </div>
 
             {/* Next Button */}

@@ -160,7 +160,7 @@ function isIgnorableLine(line: string): boolean {
 
   // Standalone section headers that should never be in content
   if (
-    /^(?:WORDS?|SENTENCES?|CONTENT|PARAGRAPH|TYPE|CLASS|GRADE|TITLE|TỪ|TỪ VỰNG|TU VUNG|CÂU|CAU|NỘI DUNG|NOI DUNG|ĐOẠN VĂN|DOAN VAN|LOẠI|LOẠI BÀI|LỚP|LOP|KHỐI|KHOI|TIÊU ĐỀ|TIEU DE|TÊN BÀI|TEN BAI)\s*[:\-]?$/i.test(
+    /^(?:WORDS?|SENTENCES?|CONTENT|PARAGRAPH|TYPE|CLASS|GRADE|TITLE|TRANSLATION|BẢN DỊCH|BAN DICH|DỊCH|DICH|VIETNAMESE|TIẾNG VIỆT|TIENG VIET|TỪ|TỪ VỰNG|TU VUNG|CÂU|CAU|NỘI DUNG|NOI DUNG|ĐOẠN VĂN|DOAN VAN|LOẠI|LOẠI BÀI|LỚP|LOP|KHỐI|KHOI|TIÊU ĐỀ|TIEU DE|TÊN BÀI|TEN BAI)\s*[:\-]?$/i.test(
       trimmed
     )
   ) {
@@ -188,7 +188,7 @@ function isIgnorableLine(line: string): boolean {
 function cleanTextItem(text: string): string {
   return text
     .replace(
-      /^(?:WORDS?|SENTENCES?|CONTENT|PARAGRAPH|TỪ VỰNG|CÂU|NỘI DUNG)\s*[:\-]\s*/i,
+      /^(?:WORDS?|SENTENCES?|CONTENT|PARAGRAPH|TRANSLATION|BẢN DỊCH|BAN DICH|DỊCH|DICH|VIETNAMESE|TIẾNG VIỆT|TIENG VIET|TỪ VỰNG|CÂU|NỘI DUNG)\s*[:\-]\s*/i,
       ''
     )
     .replace(/^[0-9]+[.)]\s*/, '') // e.g. "1. apple" -> "apple"
@@ -334,13 +334,20 @@ export function parseWordContent(
     let lessonGrade = detectedGrade;
 
     // Section parser state
-    type SectionState = 'NONE' | 'WORDS' | 'SENTENCES' | 'CONTENT' | 'PARAGRAPH';
+    type SectionState =
+      | 'NONE'
+      | 'WORDS'
+      | 'SENTENCES'
+      | 'CONTENT'
+      | 'PARAGRAPH'
+      | 'TRANSLATION';
     let currentSection: SectionState = 'NONE';
 
     const wordsList: string[] = [];
     const sentencesList: string[] = [];
     const contentLines: string[] = [];
     const paragraphLines: string[] = [];
+    const translationLines: string[] = [];
 
     // Parse lines within the lesson block (skip first line which was the lesson header)
     for (let i = 1; i < blockLines.length; i++) {
@@ -416,6 +423,14 @@ export function parseWordContent(
         currentSection = 'PARAGRAPH';
         continue;
       }
+      if (
+        /^(?:TRANSLATION|BẢN DỊCH|BAN DICH|DỊCH|DICH|VIETNAMESE|TIẾNG VIỆT|TIENG VIET)\s*[:\-]?$/i.test(
+          line
+        )
+      ) {
+        currentSection = 'TRANSLATION';
+        continue;
+      }
 
       // Check inline section headers e.g. "WORDS: apple, banana" or "CONTENT: This is my school."
       const inlineWords = line.match(
@@ -466,6 +481,16 @@ export function parseWordContent(
         continue;
       }
 
+      const inlineTranslation = line.match(
+        /^(?:TRANSLATION|BẢN DỊCH|BAN DICH|DỊCH|DICH|VIETNAMESE|TIẾNG VIỆT|TIENG VIET)\s*[:\-]\s*(.+)$/i
+      );
+      if (inlineTranslation) {
+        currentSection = 'TRANSLATION';
+        const itemClean = cleanTextItem(inlineTranslation[1]);
+        if (itemClean && !isInstructionText(itemClean)) translationLines.push(itemClean);
+        continue;
+      }
+
       // Auto-detect Title if not specified yet:
       // If we are before any section header (currentSection === 'NONE') and don't have a title yet,
       // the first non-keyword text line is treated as Title.
@@ -502,6 +527,9 @@ export function parseWordContent(
           break;
         case 'PARAGRAPH':
           paragraphLines.push(cleanedLine);
+          break;
+        case 'TRANSLATION':
+          translationLines.push(cleanedLine);
           break;
         case 'CONTENT':
         case 'NONE':
@@ -611,6 +639,8 @@ export function parseWordContent(
       words: sanitizedWords,
       sentences: sanitizedSentences,
       paragraph,
+      translation:
+        translationLines.length > 0 ? translationLines.join('\n').trim() : undefined,
       selected: true, // auto-select valid lessons
       fileId,
       fileName,
@@ -750,10 +780,10 @@ export function convertImportedLessonToDictation(
   const exercise: DictationExercise = {
     title: displayTitle,
     sentences: sentenceItems,
+    translation: lesson.translation,
     voiceMode: 'NATURAL',
     voiceAccent: 'US',
     playbackSpeed: 0.9,
-    listenLimit: 3,
     checkMode: 'EASY',
     exerciseMode: 'PRACTICE',
     createdAt: new Date().toISOString(),

@@ -27,7 +27,6 @@ import {
   VoicePitch,
   PlaybackSpeed,
   CheckMode,
-  ListenLimit,
   SavedDictationItem,
 } from '../types';
 import { splitPassageIntoSentences } from '../utils/textComparison';
@@ -85,8 +84,8 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
   const [preferredLang, setPreferredLang] = useState<string>('');
   const [pitch, setPitch] = useState<VoicePitch>(1.0);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(0.95);
-  const [listenLimit, setListenLimit] = useState<ListenLimit>(3);
   const [checkMode, setCheckMode] = useState<CheckMode>('EASY');
+  const [translation, setTranslation] = useState<string>('');
 
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
@@ -118,8 +117,8 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
       setPreferredLang(editingItem.exercise.preferredLang || '');
       setPitch(editingItem.exercise.pitch || 1.0);
       setPlaybackSpeed(editingItem.exercise.playbackSpeed || 0.95);
-      setListenLimit(editingItem.exercise.listenLimit ?? 3);
       setCheckMode(editingItem.exercise.checkMode || 'EASY');
+      setTranslation(editingItem.exercise.translation || '');
     } else {
       const draft = clientStorage.getTeacherDraft();
       if (draft) {
@@ -134,7 +133,6 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
         if (draft.preferredLang) setPreferredLang(draft.preferredLang);
         if (draft.pitch !== undefined) setPitch(draft.pitch as VoicePitch);
         if (draft.playbackSpeed) setPlaybackSpeed(draft.playbackSpeed as PlaybackSpeed);
-        if (draft.listenLimit !== undefined) setListenLimit(draft.listenLimit as ListenLimit);
         if (draft.checkMode) setCheckMode(draft.checkMode);
 
         if (draft.passage) {
@@ -182,7 +180,6 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
         preferredLang,
         pitch,
         playbackSpeed,
-        listenLimit,
         checkMode,
       });
     }
@@ -199,7 +196,6 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
     preferredLang,
     pitch,
     playbackSpeed,
-    listenLimit,
     checkMode,
   ]);
 
@@ -359,8 +355,8 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
       preferredLang: voiceMode === 'CUSTOM' ? preferredLang : undefined,
       pitch,
       playbackSpeed,
-      listenLimit,
       checkMode,
+      translation: translation.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
   };
@@ -502,6 +498,23 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
               value={rawPassage}
               onChange={(e) => setRawPassage(e.target.value)}
               placeholder="Dán nội dung tiếng Anh vào đây..."
+              className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-normal leading-relaxed text-slate-800"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>🇻🇳 Bản dịch tiếng Việt (Tùy chọn)</span>
+              </label>
+              <span className="text-xs text-slate-400">Đoạn văn hoặc đánh số 1. 2. theo từng câu</span>
+            </div>
+            <textarea
+              id="textarea-translation"
+              rows={4}
+              value={translation}
+              onChange={(e) => setTranslation(e.target.value)}
+              placeholder="Nhập bản dịch tiếng Việt cho bài nghe này (nếu có)..."
               className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-normal leading-relaxed text-slate-800"
             />
           </div>
@@ -816,49 +829,25 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
           </div>
 
           {/* Limits & Rules */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-            {/* Giới hạn lượt nghe */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Số lần nghe tối đa mỗi câu
-              </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([0, 1, 2, 3] as ListenLimit[]).map((limit) => (
-                  <button
-                    key={limit}
-                    type="button"
-                    id={`btn-limit-${limit}`}
-                    onClick={() => setListenLimit(limit)}
-                    className={`py-2.5 px-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      listenLimit === limit
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {limit === 0 ? 'Vô hạn' : `${limit} lần`}
-                  </button>
-                ))}
-              </div>
-            </div>
-
+          <div className="pt-2 border-t border-slate-100">
             {/* Chế độ chấm điểm */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                 Chế độ chấm bài
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
                   id="btn-mode-easy"
                   onClick={() => setCheckMode('EASY')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
+                  className={`py-3 px-3.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
                     checkMode === 'EASY'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <p className="font-extrabold">DỄ (Mặc định)</p>
-                  <p className={`text-[10px] font-normal ${checkMode === 'EASY' ? 'text-emerald-100' : 'text-slate-500'}`}>
+                  <p className="font-extrabold text-sm">DỄ (Mặc định)</p>
+                  <p className={`text-xs mt-0.5 font-normal ${checkMode === 'EASY' ? 'text-emerald-100' : 'text-slate-500'}`}>
                     Bỏ qua dấu câu & hoa/thường
                   </p>
                 </button>
@@ -866,14 +855,14 @@ export const TeacherCreateView: React.FC<TeacherCreateViewProps> = ({
                   type="button"
                   id="btn-mode-strict"
                   onClick={() => setCheckMode('STRICT')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
+                  className={`py-3 px-3.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
                     checkMode === 'STRICT'
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <p className="font-extrabold">CHÍNH XÁC</p>
-                  <p className={`text-[10px] font-normal ${checkMode === 'STRICT' ? 'text-indigo-100' : 'text-slate-500'}`}>
+                  <p className="font-extrabold text-sm">CHÍNH XÁC</p>
+                  <p className={`text-xs mt-0.5 font-normal ${checkMode === 'STRICT' ? 'text-indigo-100' : 'text-slate-500'}`}>
                     Bắt buộc đúng dấu, hoa, chữ
                   </p>
                 </button>

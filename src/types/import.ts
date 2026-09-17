@@ -15,6 +15,7 @@ export interface ImportedLesson {
   words: string[];
   sentences: string[];
   paragraph?: string;
+  translation?: string; // Optional Vietnamese translation
   selected: boolean;
   fileId: string;
   fileName: string;

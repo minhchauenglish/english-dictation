@@ -540,7 +540,91 @@ BÀI học cần có TITLE
   }
   console.log('  ✓ PASSED: US switch preserved Question 3/5, 2/3 listens, typed answer, hintLevel=2, and completed results');
 
-  console.log('\nALL VOICE STATE PRESERVATION TESTS PASSED PERFECTLY!');
+  console.log('\n=== TEST 6: Parsing Word content with TRANSLATION field ===');
+  const textWithTranslation = `
+CLASS: 3A
+GRADE: 3
+
+Lesson 1 - MY FAMILY
+WORDS:
+father, mother, brother, sister
+SENTENCES:
+1. This is my father.
+2. I love my family very much.
+TRANSLATION:
+1. Đây là bố của tôi.
+2. Tôi yêu gia đình của tôi rất nhiều.
+
+Lesson 2 - AT THE ZOO
+CONTENT:
+We see a big elephant and monkeys jumping in the trees.
+BẢN DỊCH:
+Chúng tôi nhìn thấy một con voi lớn và những chú khỉ nhảy nhót trên cây.
+`;
+
+  const parsedWithTrans = parseWordContent(textWithTranslation, 'test_translation.docx', 'f_trans');
+  if (parsedWithTrans.lessons.length !== 2) {
+    throw new Error(`TEST 6 FAILED: Expected 2 lessons, got ${parsedWithTrans.lessons.length}`);
+  }
+
+  console.log('Lesson 1 translation:', parsedWithTrans.lessons[0].translation);
+  if (!parsedWithTrans.lessons[0].translation?.includes('Đây là bố của tôi')) {
+    throw new Error('TEST 6 FAILED: Lesson 1 translation not parsed properly');
+  }
+
+  console.log('Lesson 2 translation:', parsedWithTrans.lessons[1].translation);
+  if (!parsedWithTrans.lessons[1].translation?.includes('Chúng tôi nhìn thấy một con voi lớn')) {
+    throw new Error('TEST 6 FAILED: Lesson 2 translation not parsed properly');
+  }
+  console.log('  ✓ PASSED: TRANSLATION field parsed with both TRANSLATION and BẢN DỊCH keywords!');
+
+  console.log('\n=== TEST 7: Sentence Chunking Algorithm ===');
+  const { splitSentenceIntoChunks } = await import('./src/utils/chunking');
+
+  // Test sentence 1: short sentence (<= 8 words)
+  const shortSent = "This is my house.";
+  const shortChunks = splitSentenceIntoChunks(shortSent);
+  console.log('Short sentence chunks:', shortChunks);
+  if (shortChunks.length !== 1 || shortChunks[0].text !== shortSent) {
+    throw new Error('TEST 7 FAILED: Short sentence should remain 1 chunk');
+  }
+
+  // Test sentence 2: the prompt's exact example
+  const promptExample = "I enjoy having some quiet time alone, but playing with friends is usually more fun.";
+  const promptChunks = splitSentenceIntoChunks(promptExample);
+  console.log('Prompt example chunks:', promptChunks);
+  // Verify all words preserved in order
+  const reassembled = promptChunks.map(c => c.text).join(' ');
+  const origTokens = promptExample.split(/\s+/);
+  const reassembledTokens = reassembled.split(/\s+/);
+  if (origTokens.join(' ') !== reassembledTokens.join(' ')) {
+    throw new Error(`TEST 7 FAILED: Words mismatch! Original: "${promptExample}", Reassembled: "${reassembled}"`);
+  }
+  if (promptChunks.length < 2) {
+    throw new Error('TEST 7 FAILED: Expected prompt example to be split into chunks');
+  }
+  console.log('  ✓ Prompt example split into chunks:', promptChunks.map(c => `[${c.text}]`).join(' + '));
+
+  // Test sentence 3: medium sentence without comma (9-14 words)
+  const medSent = "My mother prepares delicious breakfast for us every morning before school.";
+  const medChunks = splitSentenceIntoChunks(medSent);
+  console.log('Medium sentence chunks:', medChunks.map(c => `[${c.text}]`).join(' + '));
+  const reassembledMed = medChunks.map(c => c.text).join(' ');
+  if (medSent.split(/\s+/).join(' ') !== reassembledMed.split(/\s+/).join(' ')) {
+    throw new Error('TEST 7 FAILED: Medium sentence words mismatch');
+  }
+
+  // Test sentence 4: long sentence with multiple clauses
+  const longSent = "When the rain stopped yesterday afternoon, the children ran outside to play soccer in the large park near our school.";
+  const longChunks = splitSentenceIntoChunks(longSent);
+  console.log('Long sentence chunks:', longChunks.map(c => `[${c.text}]`).join(' + '));
+  const reassembledLong = longChunks.map(c => c.text).join(' ');
+  if (longSent.split(/\s+/).join(' ') !== reassembledLong.split(/\s+/).join(' ')) {
+    throw new Error('TEST 7 FAILED: Long sentence words mismatch');
+  }
+  console.log('  ✓ PASSED: All chunking tests passed with 100% word fidelity!');
+
+  console.log('\nALL TESTS PASSED PERFECTLY!');
 }
 
 runTests().catch((err) => {

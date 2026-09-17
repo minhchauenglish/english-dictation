@@ -97,9 +97,6 @@ export const StudentStartView: React.FC<StudentStartViewProps> = ({
                 : '🇺🇸 Anh-Mỹ'}{' '}
               ({exercise.playbackSpeed || 0.95}x)
             </span>
-            <span className="bg-slate-100 px-2.5 py-1 rounded-full font-semibold text-slate-700">
-              {exercise.listenLimit === 0 ? 'Nghe tự do' : `Tối đa ${exercise.listenLimit} lượt/câu`}
-            </span>
           </div>
         </div>
 

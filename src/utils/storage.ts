@@ -28,7 +28,7 @@ export interface TeacherDraft {
   preferredLang?: string;
   pitch?: number;
   playbackSpeed: number;
-  listenLimit: number;
+  listenLimit?: number;
   checkMode: 'EASY' | 'STRICT';
 }
 
@@ -67,7 +67,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'NATURAL',
       voiceAccent: 'US',
       playbackSpeed: 0.95,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },
@@ -92,7 +91,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'UK',
       voiceAccent: 'UK',
       playbackSpeed: 0.95,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },
@@ -117,7 +115,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'NATURAL',
       voiceAccent: 'US',
       playbackSpeed: 0.95,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },
@@ -142,7 +139,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'NATURAL',
       voiceAccent: 'US',
       playbackSpeed: 0.9,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },
@@ -167,7 +163,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'NATURAL',
       voiceAccent: 'US',
       playbackSpeed: 0.95,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },
@@ -192,7 +187,6 @@ const DEFAULT_STARTER_EXERCISES: SavedDictationItem[] = [
       voiceMode: 'NATURAL',
       voiceAccent: 'US',
       playbackSpeed: 1.0,
-      listenLimit: 3,
       checkMode: 'EASY',
       exerciseMode: 'PRACTICE',
     },

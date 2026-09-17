@@ -21,6 +21,7 @@ import {
   getStoredPlaybackSpeed,
   getStoredVoiceURI,
 } from '../utils/audioPlayer';
+import { getSentenceTranslation } from '../utils/translationHelper';
 
 interface StudentResultViewProps {
   exercise: DictationExercise;
@@ -365,41 +366,49 @@ Từ cần luyện: ${wrongWordsList}`
             </div>
 
             <div className="space-y-2.5">
-              {orderedSentences.map((sent, idx) => (
-                <div
-                  key={sent.id || idx}
-                  id={`full-answer-item-${idx + 1}`}
-                  className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 hover:bg-indigo-50/40 hover:border-indigo-200 transition-colors"
-                >
-                  <div className="flex items-start space-x-3 min-w-0 flex-1">
-                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
-                      {sent.order || idx + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm sm:text-base font-bold text-slate-900 select-text leading-relaxed">
-                        {sent.text}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    id={`btn-listen-answer-${idx + 1}`}
-                    title={`Nghe lại câu ${sent.order || idx + 1}`}
-                    onClick={() => handlePlaySentence(sent.text, idx)}
-                    className={`p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-extrabold shadow-xs transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer active:scale-95 ${
-                      playingSentenceIdx === idx
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white hover:bg-indigo-600 text-indigo-600 hover:text-white border-slate-200 hover:border-indigo-600'
-                    }`}
+              {orderedSentences.map((sent, idx) => {
+                const tr = getSentenceTranslation(exercise.translation, idx, orderedSentences.length);
+                return (
+                  <div
+                    key={sent.id || idx}
+                    id={`full-answer-item-${idx + 1}`}
+                    className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 hover:bg-indigo-50/40 hover:border-indigo-200 transition-colors"
                   >
-                    <Volume2 className="w-4 h-4 shrink-0" />
-                    <span className="hidden sm:inline">
-                      {playingSentenceIdx === idx ? 'Đang phát...' : 'Nghe'}
-                    </span>
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-start space-x-3 min-w-0 flex-1">
+                      <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
+                        {sent.order || idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="text-sm sm:text-base font-bold text-slate-900 select-text leading-relaxed">
+                          {sent.text}
+                        </p>
+                        {tr.hasTranslation && (
+                          <p className="text-xs sm:text-sm font-medium text-emerald-800 select-text">
+                            🇻🇳 {tr.sentenceTranslation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      id={`btn-listen-answer-${idx + 1}`}
+                      title={`Nghe lại câu ${sent.order || idx + 1}`}
+                      onClick={() => handlePlaySentence(sent.text, idx)}
+                      className={`p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-extrabold shadow-xs transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer active:scale-95 ${
+                        playingSentenceIdx === idx
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white hover:bg-indigo-600 text-indigo-600 hover:text-white border-slate-200 hover:border-indigo-600'
+                      }`}
+                    >
+                      <Volume2 className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">
+                        {playingSentenceIdx === idx ? 'Đang phát...' : 'Nghe'}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
