@@ -21,10 +21,18 @@ export interface ImportedLesson {
   fileName: string;
   detectedClass?: string;
   detectedGrade?: string;
+  detectedGroup?: string;
+  unitNumber?: string;
+  unitTitle?: string;
+  detectedUnit?: string;
+  detectedUnitTitle?: string;
   // Duplicate detection state
   isDuplicate?: boolean;
   duplicateExistingId?: string;
   duplicateExistingTitle?: string;
+  duplicateExistingGroup?: string;
+  duplicateExistingUnit?: string;
+  duplicateExistingLesson?: string;
   duplicateResolution?: DuplicateResolution;
   // Validation errors for this specific lesson
   validationError?: string;
@@ -36,9 +44,22 @@ export interface ImportFileResult {
   fileSize: number;
   detectedClass?: string;
   detectedGrade?: string;
+  detectedGroup?: string;
+  unitNumber?: string;
+  unitTitle?: string;
+  detectedUnit?: string;
+  detectedUnitTitle?: string;
   lessons: ImportedLesson[];
   errors: string[];
   rawText?: string;
+  // Audit / Post-parse diagnostics:
+  totalUnitsDetected?: number;
+  detectedUnitsList?: string[];
+  firstLessonNumber?: string;
+  lastLessonNumber?: string;
+  missingLessonNumbers?: number[];
+  duplicateLessonNumbers?: string[];
+  auditWarning?: string;
 }
 
 export interface ImportBatchSummary {

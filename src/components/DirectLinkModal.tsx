@@ -30,15 +30,22 @@ export const DirectLinkModal: React.FC<DirectLinkModalProps> = ({
       return;
     }
 
-    // Check if it contains #/practice/<encoded> or raw encoded
+    // Check if it contains #/p/<shortCode>, #/practice/<encoded>, or raw encoded
     let encodedData = clean;
-    const practiceMatch = clean.match(/#\/?practice\/(.+)$/);
-    if (practiceMatch && practiceMatch[1]) {
-      encodedData = practiceMatch[1].split('?')[0].trim();
+    const shortMatch = clean.match(/#\/?p\/([^?&]+)/);
+    const practiceMatch = clean.match(/#\/?practice\/([^?&]+)/);
+    if (shortMatch && shortMatch[1]) {
+      encodedData = shortMatch[1].trim();
+    } else if (practiceMatch && practiceMatch[1]) {
+      encodedData = practiceMatch[1].trim();
     } else {
       const hashIndex = clean.indexOf('#');
       if (hashIndex !== -1) {
-        encodedData = clean.slice(hashIndex + 1).replace(/^\/?practice\//, '').split('?')[0].trim();
+        encodedData = clean
+          .slice(hashIndex + 1)
+          .replace(/^\/?(p|practice)\//, '')
+          .split('?')[0]
+          .trim();
       }
     }
 
@@ -83,7 +90,7 @@ export const DirectLinkModal: React.FC<DirectLinkModalProps> = ({
                 setInputUrl(e.target.value);
                 setError('');
               }}
-              placeholder="https://minhchauenglish.github.io/english-dictation/#/practice/..."
+              placeholder="https://minhchauenglish.github.io/english-dictation/#/p/..."
               className="w-full px-4 py-3 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoFocus
             />

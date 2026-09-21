@@ -18,6 +18,12 @@ import {
 import { SavedDictationItem, DictationExercise } from '../../types';
 import { clientStorage } from '../../utils/storage';
 import { WordImportModal } from './WordImportModal';
+import {
+  buildLibraryFilterHierarchy,
+  itemMatchesFilter,
+  classifyClassLevel,
+  classifyExerciseItem,
+} from '../../utils/libraryFilters';
 
 interface DictationLibraryTabProps {
   onOpenCreateNew: () => void;
@@ -39,61 +45,64 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
   );
   const teacherClasses = useMemo(() => clientStorage.getTeacherClasses(), []);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
+  const [selectedMainGroup, setSelectedMainGroup] = useState<string>('ALL');
+  const [selectedSubLevel, setSelectedSubLevel] = useState<string>('ALL');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isWordImportOpen, setIsWordImportOpen] = useState(false);
 
-  // Extract unique class levels and assigned classes for filtering
-  const availableLevels = useMemo(() => {
-    const levels = new Set<string>();
-    dictations.forEach((d) => {
-      if (d.classLevel?.trim()) {
-        d.classLevel.split(',').forEach((lvl) => {
-          const trimmed = lvl.trim();
-          if (trimmed) levels.add(trimmed);
-        });
-      }
-      if (d.classIds && d.classIds.length > 0) {
-        d.classIds.forEach((cid) => {
-          const cls = teacherClasses.find((tc) => tc.id === cid);
-          if (cls) levels.add(cls.name);
-        });
-      }
-    });
-    return Array.from(levels).sort();
+  // Derive two-level filter hierarchy from existing dictations and teacher classes
+  const filterHierarchy = useMemo(() => {
+    return buildLibraryFilterHierarchy(dictations, teacherClasses);
   }, [dictations, teacherClasses]);
 
-  // Filtered dictations
+  // Find active main group object if selected
+  const activeMainGroupItem = useMemo(() => {
+    if (selectedMainGroup === 'ALL') return null;
+    return filterHierarchy.find((g) => g.key === selectedMainGroup) || null;
+  }, [filterHierarchy, selectedMainGroup]);
+
+  // Active sublevels available for the currently selected main group
+  const activeSubLevels = useMemo(() => {
+    return activeMainGroupItem ? activeMainGroupItem.subLevels : [];
+  }, [activeMainGroupItem]);
+
+  // When switching main group, reset sublevel to ALL
+  const handleSelectMainGroup = (groupKey: string) => {
+    setSelectedMainGroup(groupKey);
+    setSelectedSubLevel('ALL');
+  };
+
+  // Filtered dictations matching both 2-level category filter and search query
   const filteredDictations = useMemo(() => {
     return dictations.filter((d) => {
-      const matchQuery =
-        !searchQuery.trim() ||
-        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (d.topic && d.topic.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (d.classLevel && d.classLevel.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (d.passage && d.passage.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (d.classIds &&
-          d.classIds.some((cid) => {
-            const cls = teacherClasses.find((tc) => tc.id === cid);
-            return cls && cls.name.toLowerCase().includes(searchQuery.toLowerCase());
-          }));
+      // 1. Check 2-level filter match
+      const matchFilter = itemMatchesFilter(
+        d,
+        selectedMainGroup,
+        selectedSubLevel,
+        teacherClasses
+      );
+      if (!matchFilter) return false;
 
-      const matchLevel =
-        selectedLevel === 'ALL' ||
-        (d.classLevel &&
-          d.classLevel
-            .split(',')
-            .map((s) => s.trim().toLowerCase())
-            .includes(selectedLevel.toLowerCase())) ||
-        (d.classIds &&
-          d.classIds.some((cid) => {
-            const cls = teacherClasses.find((tc) => tc.id === cid);
-            return cls && cls.name.toLowerCase() === selectedLevel.toLowerCase();
-          }));
+      // 2. Check search query match
+      if (!searchQuery.trim()) return true;
 
-      return matchQuery && matchLevel;
+      const q = searchQuery.toLowerCase();
+      const matchTitle = d.title.toLowerCase().includes(q);
+      const matchTopic = !!(d.topic && d.topic.toLowerCase().includes(q));
+      const matchClassLevel = !!(d.classLevel && d.classLevel.toLowerCase().includes(q));
+      const matchPassage = !!(d.passage && d.passage.toLowerCase().includes(q));
+      const matchClasses = !!(
+        d.classIds &&
+        d.classIds.some((cid) => {
+          const cls = teacherClasses.find((tc) => tc.id === cid);
+          return cls && cls.name.toLowerCase().includes(q);
+        })
+      );
+
+      return matchTitle || matchTopic || matchClassLevel || matchPassage || matchClasses;
     });
-  }, [dictations, teacherClasses, searchQuery, selectedLevel]);
+  }, [dictations, teacherClasses, searchQuery, selectedMainGroup, selectedSubLevel]);
 
   // Delete exercise
   const handleDelete = (id: string) => {
@@ -159,34 +168,91 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
         </div>
       </div>
 
-      {/* Class Level Filter Pills */}
-      {availableLevels.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <button
-            type="button"
-            onClick={() => setSelectedLevel('ALL')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
-              selectedLevel === 'ALL'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Tất cả khối ({dictations.length})
-          </button>
-          {availableLevels.map((lvl) => (
+      {/* Two-Level Filter UI */}
+      {filterHierarchy.length > 0 && (
+        <div id="library-two-level-filter" className="flex flex-col gap-2.5">
+          {/* LEVEL 1 — MAIN GROUP / GRADE */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs flex-nowrap sm:flex-wrap">
+            {/* Tất cả button */}
             <button
-              key={lvl}
+              id="filter-main-group-all"
               type="button"
-              onClick={() => setSelectedLevel(lvl)}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
-                selectedLevel === lvl
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              onClick={() => handleSelectMainGroup('ALL')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                selectedMainGroup === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/10'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
-              {lvl}
+              Tất cả ({dictations.length})
             </button>
-          ))}
+
+            {/* Main Groups (Only existing, derived from data) */}
+            {filterHierarchy.map((group) => {
+              const isActive = selectedMainGroup === group.key;
+              return (
+                <button
+                  key={group.key}
+                  id={`filter-main-group-${group.key}`}
+                  type="button"
+                  onClick={() => handleSelectMainGroup(group.key)}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-600/20'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  {group.label} ({group.count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* LEVEL 2 — SUBLEVEL (Only visible when active main group has sublevels) */}
+          {activeSubLevels.length > 0 && (
+            <div
+              id="library-sublevel-row"
+              className="flex items-center gap-1.5 overflow-x-auto p-2 bg-indigo-50/60 rounded-2xl border border-indigo-100/80 scrollbar-none text-xs flex-nowrap sm:flex-wrap animate-in fade-in slide-in-from-top-1 duration-150"
+            >
+              <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider px-1.5 shrink-0 hidden sm:inline">
+                Cấp độ:
+              </span>
+
+              {/* Tất cả sublevels for this main group */}
+              <button
+                id="filter-sublevel-all"
+                type="button"
+                onClick={() => setSelectedSubLevel('ALL')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                  selectedSubLevel === 'ALL'
+                    ? 'bg-indigo-700 text-white shadow-xs'
+                    : 'bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+                }`}
+              >
+                Tất cả ({activeMainGroupItem?.count || 0})
+              </button>
+
+              {/* Individual SubLevels */}
+              {activeSubLevels.map((sub) => {
+                const isSubActive = selectedSubLevel === sub.key;
+                return (
+                  <button
+                    key={sub.key}
+                    id={`filter-sublevel-${sub.key}`}
+                    type="button"
+                    onClick={() => setSelectedSubLevel(sub.key)}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                      isSubActive
+                        ? 'bg-indigo-700 text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-indigo-200/80 hover:bg-indigo-100 hover:text-indigo-900'
+                    }`}
+                  >
+                    {sub.label} ({sub.count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -197,20 +263,36 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
             <BookOpen className="w-7 h-7" />
           </div>
           <h3 className="font-extrabold text-slate-800 text-base mb-1">
-            {searchQuery ? 'Không tìm thấy bài tập phù hợp' : 'Thư viện bài chưa có bài nào'}
+            {searchQuery
+              ? 'Không tìm thấy bài tập phù hợp'
+              : selectedMainGroup !== 'ALL'
+              ? `Chưa có bài tập trong nhóm ${selectedMainGroup}`
+              : 'Thư viện bài chưa có bài nào'}
           </h3>
           <p className="text-xs text-slate-500 max-w-sm mb-4">
             {searchQuery
               ? 'Hãy thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.'
-              : 'Tạo bài tập dictation để lưu vào thư viện và tái sử dụng cho nhiều lớp.'}
+              : selectedMainGroup !== 'ALL'
+              ? 'Chưa có bài tập trong nhóm này. Hãy dùng Import Word để thêm bài.'
+              : 'Tạo bài tập dictation hoặc dùng Import Word để thêm bài học cho các nhóm lớp.'}
           </p>
-          <button
-            type="button"
-            onClick={onOpenCreateNew}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
-          >
-            ➕ Tạo bài tập ngay
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsWordImportOpen(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <FileUp className="w-3.5 h-3.5" />
+              <span>📥 Import Word</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCreateNew}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+            >
+              ➕ Tạo bài mới
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -231,27 +313,22 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
                         <span className="font-extrabold text-slate-900 text-base leading-snug">
                           {item.title}
                         </span>
-                        {item.classLevel && (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {item.classLevel
-                              .split(',')
-                              .map((c) => c.trim())
-                              .filter(Boolean)
-                              .map((cls) => (
-                                <span
-                                  key={cls}
-                                  className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold"
-                                >
-                                  {cls}
-                                </span>
-                              ))}
-                          </div>
-                        )}
+                        {(() => {
+                          const classification = classifyExerciseItem(item, teacherClasses);
+                          return (
+                            <span
+                              title={`Phân loại: ${classification.mainGroup}${classification.subLevel ? ' • ' + classification.subLevel : ''} | Gốc: ${item.classLevel || 'General'}`}
+                              className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold"
+                            >
+                              {classification.displayClassLabel}
+                            </span>
+                          );
+                        })()}
                         {item.classIds && item.classIds.length > 0 && (
                           <div className="flex items-center gap-1 flex-wrap">
                             {item.classIds.map((cid) => {
                               const cls = teacherClasses.find((tc) => tc.id === cid);
-                              if (!cls || cls.name === item.classLevel) return null;
+                              if (!cls) return null;
                               return (
                                 <span
                                   key={cid}

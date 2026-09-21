@@ -22,22 +22,52 @@ const VALID_PITCHES: VoicePitch[] = [0.9, 1.0, 1.05, 1.1];
 
 /**
  * Serializes and compresses a complete DictationExercise into a short URI-safe string.
+ * Omits standard default values to minimize payload size and shortCode length.
  */
 export function encodeExercise(exercise: DictationExercise): string {
+  const isTest = exercise.exerciseMode === 'TEST';
+  const voiceAccent = exercise.voiceAccent || 'US';
+  const voiceMode = exercise.voiceMode || (voiceAccent === 'UK' ? 'UK' : 'NATURAL');
+  const pitch = exercise.pitch ?? 1.0;
+  const speed = exercise.playbackSpeed || 0.95;
+  const checkMode = exercise.checkMode || 'EASY';
+
   const minified: MinifiedExercisePayload = {
     t: exercise.title.trim(),
     s: exercise.sentences.map((s) => s.text.trim()).filter(Boolean),
-    tr: exercise.translation ? exercise.translation.trim() : undefined,
-    em: exercise.exerciseMode === 'TEST' ? 'test' : 'practice',
-    v: exercise.voiceAccent || 'US',
-    vm: exercise.voiceMode || 'NATURAL',
-    vn: exercise.preferredVoiceName,
-    vu: exercise.preferredVoiceURI,
-    vl: exercise.preferredLang,
-    p: exercise.pitch ?? 1.0,
-    r: exercise.playbackSpeed || 0.95,
-    m: exercise.checkMode || 'EASY',
   };
+
+  // Only include optional/non-default fields if set
+  if (exercise.translation && exercise.translation.trim()) {
+    minified.tr = exercise.translation.trim();
+  }
+  if (isTest) {
+    minified.em = 'test';
+  }
+  if (voiceAccent !== 'US') {
+    minified.v = voiceAccent;
+  }
+  if (voiceMode !== 'NATURAL') {
+    minified.vm = voiceMode;
+  }
+  if (exercise.preferredVoiceName) {
+    minified.vn = exercise.preferredVoiceName;
+  }
+  if (exercise.preferredVoiceURI) {
+    minified.vu = exercise.preferredVoiceURI;
+  }
+  if (exercise.preferredLang) {
+    minified.vl = exercise.preferredLang;
+  }
+  if (pitch !== 1.0) {
+    minified.p = pitch;
+  }
+  if (speed !== 0.95) {
+    minified.r = speed;
+  }
+  if (checkMode !== 'EASY') {
+    minified.m = checkMode;
+  }
 
   const json = JSON.stringify(minified);
   return LZString.compressToEncodedURIComponent(json);
@@ -140,31 +170,47 @@ function parsePayload(parsed: any): DictationExercise | null {
 export const GITHUB_PAGES_BASE_URL = 'https://minhchauenglish.github.io/english-dictation/';
 
 /**
- * Builds the full shareable URL containing the encoded exercise in the hash.
- * Output format: https://minhchauenglish.github.io/english-dictation/#/practice/<encoded>
+ * Builds the modern short shareable URL containing the optimized encoded exercise in the hash.
+ * Output format: https://minhchauenglish.github.io/english-dictation/#/p/<shortCode>
  */
 export function buildShareUrl(exercise: DictationExercise): string {
   const encoded = encodeExercise(exercise);
-  return `${GITHUB_PAGES_BASE_URL}#/practice/${encoded}`;
+  return `${GITHUB_PAGES_BASE_URL}#/p/${encoded}`;
 }
 
 /**
- * Extracts encoded string from window.location.hash
+ * Extracts encoded exercise string from window.location.hash
+ * Supports:
+ * - Modern short route: #/p/<shortCode> or #p/<shortCode>
+ * - Legacy route: #/practice/<encoded> or #practice/<encoded>
+ * - Direct hash fallback: #<encoded>
  */
 export function getEncodedExerciseFromLocation(): string | null {
   if (typeof window === 'undefined') return null;
   const hash = window.location.hash || '';
   if (!hash) return null;
 
-  // Match #/practice/<encoded> or #practice/<encoded> with optional query params
+  // 1. Modern short route: #/p/<shortCode> or #p/<shortCode>
+  const shortPrefixMatch = hash.match(/#\/?p\/([^?&]+)/);
+  if (shortPrefixMatch && shortPrefixMatch[1]) {
+    return shortPrefixMatch[1].trim();
+  }
+
+  // 2. Legacy full route: #/practice/<encoded> or #practice/<encoded>
   const practicePrefixMatch = hash.match(/#\/?practice\/([^?&]+)/);
   if (practicePrefixMatch && practicePrefixMatch[1]) {
     return practicePrefixMatch[1].trim();
   }
 
-  // Fallback match #<encoded> (excluding internal routes)
+  // 3. Fallback match #<encoded> (excluding internal routes)
   const rawMatch = hash.replace(/^#\/?/, '').split('?')[0].trim();
-  if (rawMatch && rawMatch !== 'practice' && !rawMatch.startsWith('practice/')) {
+  if (
+    rawMatch &&
+    rawMatch !== 'practice' &&
+    rawMatch !== 'p' &&
+    !rawMatch.startsWith('practice/') &&
+    !rawMatch.startsWith('p/')
+  ) {
     return rawMatch;
   }
 

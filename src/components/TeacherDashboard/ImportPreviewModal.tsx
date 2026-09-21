@@ -402,6 +402,11 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
           topic: dictationData.topic,
           passage: dictationData.passage,
           exercise: dictationData.exercise,
+          group: dictationData.group,
+          grade: dictationData.grade,
+          unit: dictationData.unit,
+          unitTitle: dictationData.unitTitle,
+          lessonNumber: dictationData.lessonNumber,
         };
 
         if (lesson.duplicateResolution === 'REPLACE' && lesson.duplicateExistingId) {
@@ -626,6 +631,31 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
 
         {/* Main Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/40">
+          {/* File Audit / Diagnostic Summary Banner */}
+          {fileResults.some((f) => f.auditWarning || (f.totalUnitsDetected && f.totalUnitsDetected > 1)) && (
+            <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl text-xs space-y-1.5">
+              {fileResults.map((f) => (
+                <div key={f.fileId} className="flex flex-wrap items-center gap-2">
+                  <span className="font-extrabold text-indigo-900">{f.fileName}:</span>
+                  <span className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-700 font-bold">
+                    {f.lessons.length} bài
+                  </span>
+                  {f.totalUnitsDetected !== undefined && f.totalUnitsDetected > 1 && (
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-slate-700 font-semibold">
+                      {f.totalUnitsDetected} Units (Bài {f.firstLessonNumber} → {f.lastLessonNumber})
+                    </span>
+                  )}
+                  {f.auditWarning && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-bold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
+                      {f.auditWarning}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {visibleLessons.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
               <p className="text-sm font-bold text-slate-700">
@@ -730,15 +760,77 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
 
                 {/* Duplicate Warning & Resolution Options */}
                 {item.isDuplicate && (
-                  <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                    <div className="flex items-center space-x-1.5 font-bold mb-1.5">
+                  <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                    <div className="flex items-center space-x-1.5 font-bold mb-2.5 text-amber-800">
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>
-                        ⚠ Trùng tên bài: Bài <strong>"{item.duplicateExistingTitle || item.title}"</strong> đã tồn tại trong thư viện.
-                      </span>
+                      <span>⚠ Bài này đã tồn tại trong cùng khối/Unit.</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 mt-2 pl-5 font-medium">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 bg-amber-100/70 p-3 rounded-xl text-xs mb-3 border border-amber-200/70 font-medium">
+                      {/* Bài đang import */}
+                      <div className="space-y-1 bg-white/70 p-2.5 rounded-lg border border-amber-200/50">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-amber-900 border-b border-amber-200/60 pb-1 mb-1.5">
+                          Bài đang import:
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Lớp:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.detectedGroup || item.detectedClass || (item.detectedGrade ? `Lớp ${item.detectedGrade}` : 'Chung')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Unit:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.unitNumber || item.detectedUnit || '–'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Lesson:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.lessonNumber || '–'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Tên bài:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.title}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bài đã có */}
+                      <div className="space-y-1 bg-white/70 p-2.5 rounded-lg border border-amber-200/50">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-amber-900 border-b border-amber-200/60 pb-1 mb-1.5">
+                          Bài đã có:
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Lớp:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.duplicateExistingGroup || 'Chung'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Unit:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.duplicateExistingUnit || '–'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Lesson:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.duplicateExistingLesson || '–'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold">Tên bài:</span>{' '}
+                          <span className="font-bold text-slate-900">
+                            {item.duplicateExistingTitle || item.title}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 mt-2 pl-1 font-medium">
                       <label className="flex items-center space-x-1.5 cursor-pointer">
                         <input
                           type="radio"

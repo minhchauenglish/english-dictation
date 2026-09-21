@@ -371,13 +371,47 @@ export const WordImportModal: React.FC<WordImportModalProps> = ({
                             )}
 
                             {item.status === 'SUCCESS' && item.result && (
-                              <span className="text-emerald-700 font-bold flex items-center space-x-1">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>
-                                  Tìm thấy {item.result.lessons.length} bài học
-                                  {item.result.detectedClass && ` (Lớp ${item.result.detectedClass})`}
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                                <span className="text-emerald-700 font-bold flex items-center space-x-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>
+                                    Đã tìm thấy {item.result.lessons.length} bài học
+                                    {item.result.detectedGroup
+                                      ? ` • ${item.result.detectedGroup}`
+                                      : item.result.detectedClass
+                                      ? ` • Lớp ${item.result.detectedClass}`
+                                      : item.result.detectedGrade
+                                      ? ` • Khối ${item.result.detectedGrade}`
+                                      : ''}
+                                  </span>
                                 </span>
-                              </span>
+
+                                {item.result.totalUnitsDetected !== undefined && item.result.totalUnitsDetected > 1 && (
+                                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {item.result.totalUnitsDetected} Units
+                                  </span>
+                                )}
+
+                                {item.result.firstLessonNumber && item.result.lastLessonNumber && (
+                                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                    Bài {item.result.firstLessonNumber} → {item.result.lastLessonNumber}
+                                  </span>
+                                )}
+
+                                {item.result.auditWarning && (
+                                  <span className="text-amber-800 font-semibold flex items-center space-x-1 text-2xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                    <span>⚠ {item.result.auditWarning}</span>
+                                  </span>
+                                )}
+
+                                {!item.result.detectedGroup &&
+                                  !item.result.detectedClass &&
+                                  !item.result.detectedGrade && (
+                                    <span className="text-amber-700 font-bold flex items-center space-x-1 text-2xs bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                      <span>⚠ Chưa xác định khối lớp → Giáo viên chọn lớp</span>
+                                    </span>
+                                  )}
+                              </div>
                             )}
                           </div>
                         </div>

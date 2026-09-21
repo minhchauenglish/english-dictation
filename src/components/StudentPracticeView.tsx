@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Layers,
+  Mic,
 } from 'lucide-react';
 import {
   DictationExercise,
