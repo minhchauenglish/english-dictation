@@ -112,10 +112,29 @@ export const UNIFIED_LESSON_REGEX =
 export const STANDALONE_LESSON_REGEX = UNIFIED_LESSON_REGEX;
 
 /**
- * Regex for Title anchor line (TITLE: ...)
+ * Regex for Title anchor line (TITLE: ..., QUESTION: ..., TOPIC: ...)
  */
 export const TITLE_TAG_REGEX =
-  /^\s*(?:TITLE|TIÊU\s*ĐỀ|TIEU\s*DE|TÊN\s*BÀI|TEN\s*BAI)\s*:\s*(.+)$/i;
+  /^\s*(?:TITLE|TIÊU\s*ĐỀ|TIEU\s*DE|TÊN\s*BÀI|TEN\s*BAI|QUESTION|TOPIC|CÂU\s*HỎI|CAU\s*HOI|CHỦ\s*ĐỀ|CHU\s*DE)\s*:\s*(.+)$/i;
+
+/**
+ * Regex for Debate lesson code line (LESSON CODE: L2-001, CODE: L2-001, MÃ BÀI: L2-001)
+ */
+export const DEBATE_CODE_TAG_REGEX =
+  /^\s*(?:LESSON\s*CODE|MÃ\s*BÀI|MA\s*BAI|CODE|MÃ)\s*:\s*([a-zA-Z0-9\-_]+)$/i;
+
+/**
+ * Regex for Standalone or Header Debate Code:
+ * Matches: "L2-001", "L2-001: Should students wear uniforms?", "L3-045", "L4-090"
+ */
+export const DEBATE_CODE_HEADER_REGEX =
+  /^\s*([L|l][234]-\d{2,4})\b(?:\s*[:\-–—.]\s*|\s+|$)(.*)$/i;
+
+/**
+ * Regex for explicit Level tag (LEVEL: 2)
+ */
+export const LEVEL_TAG_REGEX =
+  /^\s*(?:LEVEL|CẤP\s*ĐỘ|CAP\s*DO)\s*:\s*([234]|\d+)\b/i;
 
 /**
  * Regex for metadata lesson line (LESSON: 1)
@@ -252,6 +271,15 @@ export function cleanLessonTitle(rawTitle: string): string {
     ''
   );
 
+  // Strip debate codes: "[L2-001]", "L2-001:", "L3-045 -"
+  cleaned = cleaned.replace(/^\s*\[?[Ll][234]-\d{2,4}\]?\s*[:\-–—.]*\s*/i, '');
+
+  // Strip question / topic tag prefix: "QUESTION: ...", "TOPIC: ..."
+  cleaned = cleaned.replace(
+    /^\s*(?:QUESTION|TOPIC|CÂU\s*HỎI|CAU\s*HOI|CHỦ\s*ĐỀ|CHU\s*DE)\s*[:\-–—.]*\s*/i,
+    ''
+  );
+
   // Strip single prefixes: "Lesson 1:", "Bài 1 -", "Unit 1:"
   cleaned = cleaned.replace(
     /^\s*(?:LESSON|BÀI|BAI|UNIT)\s*(?::\s*|\s+)\d+[a-zA-Z]?\s*[:\-–—.]*\s*/i,
@@ -341,6 +369,7 @@ export function parseWordContent(
   let fileClass: string | undefined;
   let fileGrade: string | undefined;
   let fileGroup: string | undefined;
+  let fileLevel: string | undefined;
   let fileUnit: string | undefined;
   let fileUnitTitle: string | undefined;
 
@@ -351,6 +380,20 @@ export function parseWordContent(
       const groupMatch = line.match(/^(?:GROUP|NHÓM|NHOM):\s*(.+)$/i);
       if (groupMatch && groupMatch[1]) {
         fileGroup = groupMatch[1].trim();
+      } else if (/^(?:DEBATE|TRANH\s*BIỆN)\b/i.test(line)) {
+        fileGroup = 'DEBATE';
+      }
+    }
+    if (!fileLevel) {
+      const levelMatch = line.match(/^(?:LEVEL|CẤP\s*ĐỘ|CAP\s*DO):\s*([234]|\d+)\b/i);
+      if (levelMatch && levelMatch[1]) {
+        fileLevel = levelMatch[1].trim();
+      } else {
+        const debateLevelMatch = line.match(/^(?:DEBATE\s*)?LEVEL\s*([234])\b/i);
+        if (debateLevelMatch && debateLevelMatch[1]) {
+          fileLevel = debateLevelMatch[1].trim();
+          if (!fileGroup) fileGroup = 'DEBATE';
+        }
       }
     }
     if (!fileClass) {
@@ -399,6 +442,7 @@ export function parseWordContent(
   // 3. Scan candidate lesson boundaries across document lines
   const compositeMatches: LessonBoundary[] = [];
   const lessonMatches: LessonBoundary[] = [];
+  const debateCodeMatches: LessonBoundary[] = [];
   const titleTagMatches: { lineIdx: number; title: string }[] = [];
   const unitTagMatches: { lineIdx: number; unit: string; inlineTitle?: string }[] = [];
 
@@ -417,9 +461,10 @@ export function parseWordContent(
     // Exit TOC section if real metadata or lesson header encountered
     if (
       inTOCSection &&
-      (/^(?:GROUP|GRADE|CLASS|TYPE|WORDS|CONTENT):\s*/i.test(line) ||
+      (/^(?:GROUP|GRADE|CLASS|LEVEL|LESSON\s*CODE|TYPE|WORDS|CONTENT):\s*/i.test(line) ||
         COMPOSITE_HEADER_REGEX.test(line) ||
         UNIFIED_LESSON_REGEX.test(line) ||
+        DEBATE_CODE_HEADER_REGEX.test(line) ||
         TITLE_TAG_REGEX.test(line))
     ) {
       inTOCSection = false;
@@ -457,7 +502,22 @@ export function parseWordContent(
       continue;
     }
 
-    // Candidate 3: Title Tag (TITLE: ...)
+    // Candidate 2B: Explicit Debate Lesson Code Header (L2-001: Question, LESSON CODE: L2-001)
+    const dCodeMatch = line.match(DEBATE_CODE_HEADER_REGEX) || line.match(DEBATE_CODE_TAG_REGEX);
+    if (dCodeMatch) {
+      const code = (dCodeMatch[1] || '').trim().toUpperCase();
+      const rawNum = code.replace(/^[Ll][234]-0*/, '');
+      debateCodeMatches.push({
+        startIndex: i,
+        lessonNumber: rawNum || '1',
+        inlineTitle: dCodeMatch[2] ? cleanLessonTitle(dCodeMatch[2]) : undefined,
+      });
+      if (!line.includes('LESSON') && !line.includes('UNIT') && !line.includes('BÀI')) {
+        continue;
+      }
+    }
+
+    // Candidate 3: Title Tag (TITLE: ..., QUESTION: ...)
     const titleMatch = line.match(TITLE_TAG_REGEX);
     if (titleMatch) {
       titleTagMatches.push({
@@ -482,6 +542,7 @@ export function parseWordContent(
   // 4. Select the Lesson Boundary Strategy based on priority:
   // Priority 1: Composite Headers if present in significant numbers (e.g. Lớp 5 has 80)
   // Priority 2: Unified Lesson Headers (e.g. Lớp 11 with 50 LESSON: 1... LESSON: 50, template with 4)
+  // Priority 2B: Debate Code Headers (e.g. Debate with 90 L2-001 / L3-001 / L4-001)
   // Priority 3: Title Tag Fallback (e.g. Lớp 10 with 50 TITLE: tags, no LESSON keyword)
   // Priority 4: Unit Header Fallback
   let chosenBoundaries: LessonBoundary[] = [];
@@ -493,6 +554,8 @@ export function parseWordContent(
     chosenBoundaries = compositeMatches;
   } else if (lessonMatches.length > 0) {
     chosenBoundaries = lessonMatches;
+  } else if (debateCodeMatches.length > 0) {
+    chosenBoundaries = debateCodeMatches;
   } else if (titleTagMatches.length > 0) {
     chosenBoundaries = titleTagMatches.map((t, idx) => ({
       startIndex: t.lineIdx,
@@ -583,10 +646,20 @@ export function parseWordContent(
     let title = boundary.inlineTitle || '';
     let rawType = '';
     let lessonGroup = fileGroup;
+    let lessonLevel = fileLevel;
+    let lessonCode: string | undefined;
     let lessonClass = fileClass;
     let lessonGrade = fileGrade;
     let lessonUnit = boundary.unit || currentActiveUnit;
     let lessonUnitTitle = currentActiveUnitTitle;
+
+    // Check if boundary inline title has a debate code prefix like "L2-001"
+    if (boundary.inlineTitle) {
+      const inlineCodeMatch = boundary.inlineTitle.match(/^([Ll][234]-\d{2,4})\b/i);
+      if (inlineCodeMatch) {
+        lessonCode = inlineCodeMatch[1].toUpperCase();
+      }
+    }
 
     // Determine the endIndex for this lesson:
     // This lesson ends at nextStartIndex, OR if a new UNIT header appears before nextStartIndex,
@@ -675,6 +748,34 @@ export function parseWordContent(
         continue;
       }
 
+      // 3B. Metadata check: LEVEL:
+      const levelMatch = line.match(LEVEL_TAG_REGEX);
+      if (levelMatch) {
+        lessonLevel = levelMatch[1].trim();
+        lessonGroup = 'DEBATE';
+        currentSection = 'NONE';
+        continue;
+      }
+
+      // 3C. Metadata check: DEBATE LESSON CODE / MÃ BÀI:
+      const codeTagMatch = line.match(DEBATE_CODE_TAG_REGEX);
+      if (codeTagMatch) {
+        lessonCode = codeTagMatch[1].trim().toUpperCase();
+        currentSection = 'NONE';
+        continue;
+      }
+
+      // 3D. Metadata check: Standalone debate code header (e.g. "L2-001" or "L2-001: Should students wear uniforms?")
+      const standDCodeMatch = line.match(DEBATE_CODE_HEADER_REGEX);
+      if (standDCodeMatch && !line.includes('WORDS') && !line.includes('CONTENT')) {
+        lessonCode = standDCodeMatch[1].trim().toUpperCase();
+        if (standDCodeMatch[2] && !title) {
+          title = cleanLessonTitle(standDCodeMatch[2]);
+        }
+        currentSection = 'NONE';
+        continue;
+      }
+
       // 4. Metadata check: CLASS:
       const classMatch = line.match(/^(?:CLASS|LỚP|LOP):\s*(.+)$/i);
       if (classMatch) {
@@ -728,7 +829,7 @@ export function parseWordContent(
         currentSection = 'SENTENCES';
         continue;
       }
-      if (/^(?:CONTENT|NỘI\s*DUNG|NOI\s*DUNG)\s*[:\-]?$/i.test(line)) {
+      if (/^(?:CONTENT|NỘI\s*DUNG|NOI\s*DUNG|SAMPLE\s*SPEECH|SPEAKING\s*CONTENT|SAMPLE|SPEECH)\s*[:\-]?$/i.test(line)) {
         currentSection = 'CONTENT';
         continue;
       }
@@ -775,7 +876,7 @@ export function parseWordContent(
       }
 
       const inlineContent = line.match(
-        /^(?:CONTENT|NỘI\s*DUNG|NOI\s*DUNG)\s*[:\-]\s*(.+)$/i
+        /^(?:CONTENT|NỘI\s*DUNG|NOI\s*DUNG|SAMPLE\s*SPEECH|SPEAKING\s*CONTENT|SAMPLE|SPEECH)\s*[:\-]\s*(.+)$/i
       );
       if (inlineContent) {
         currentSection = 'CONTENT';
@@ -940,6 +1041,42 @@ export function parseWordContent(
       continue;
     }
 
+    // Check if this is a DEBATE lesson
+    const isDebateLesson =
+      lessonGroup?.toUpperCase() === 'DEBATE' ||
+      fileGroup?.toUpperCase() === 'DEBATE' ||
+      Boolean(lessonLevel) ||
+      Boolean(fileLevel) ||
+      /^[Ll][234]-/i.test(lessonCode || '') ||
+      /^[Ll][234]-/i.test(title || '');
+
+    if (isDebateLesson) {
+      lessonGroup = 'DEBATE';
+      if (!lessonLevel && lessonCode) {
+        const m = lessonCode.match(/^[Ll]([234])-/i);
+        if (m) lessonLevel = m[1];
+      }
+      if (!lessonLevel && fileLevel) {
+        lessonLevel = fileLevel;
+      }
+      if (!lessonCode && lessonLevel && lessonNumber) {
+        const num = parseInt(lessonNumber, 10);
+        if (!isNaN(num)) {
+          lessonCode = `L${lessonLevel}-${String(num).padStart(3, '0')}`;
+        }
+      }
+      if (!lessonCode && boundary.inlineTitle) {
+        const m = boundary.inlineTitle.match(/([Ll][234]-\d{2,4})/i);
+        if (m) lessonCode = m[1].toUpperCase();
+      }
+      if (lessonLevel) {
+        lessonClass = `DEBATE LEVEL ${lessonLevel}`;
+      }
+      if (paragraphLines.length > 0 || contentLines.length > 0) {
+        finalType = 'PARAGRAPH';
+      }
+    }
+
     parsedLessons.push({
       id: `imp_${Date.now()}_${lIdx}_${Math.random().toString(36).slice(2, 6)}`,
       lessonNumber,
@@ -954,6 +1091,8 @@ export function parseWordContent(
       fileId,
       fileName,
       detectedGroup: lessonGroup,
+      detectedLevel: lessonLevel,
+      lessonCode: lessonCode,
       detectedClass: lessonClass,
       detectedGrade: lessonGrade,
       unitNumber: lessonUnit,
@@ -1018,6 +1157,31 @@ export function parseWordContent(
     auditWarning = `Phát hiện bài học trùng số thứ tự trong file: Lesson ${duplicateLessonNumbers.join(', ')}.`;
   }
 
+  // Check Debate Stats (Requirement 7)
+  const isDebate =
+    fileGroup?.toUpperCase() === 'DEBATE' ||
+    parsedLessons.some(
+      (l) =>
+        l.detectedGroup?.toUpperCase() === 'DEBATE' ||
+        Boolean(l.detectedLevel) ||
+        /^[Ll][234]-/i.test(l.lessonCode || '')
+    );
+
+  let debateLevelStats: ImportFileResult['debateLevelStats'] | undefined;
+  if (isDebate) {
+    const lvl2 = parsedLessons.filter((l) => l.detectedLevel === '2').length;
+    const lvl3 = parsedLessons.filter((l) => l.detectedLevel === '3').length;
+    const lvl4 = parsedLessons.filter((l) => l.detectedLevel === '4').length;
+    const total = lvl2 + lvl3 + lvl4;
+    debateLevelStats = {
+      level2: { detected: lvl2, expected: 90, status: lvl2 === 90 ? 'PASS' : 'FAIL' },
+      level3: { detected: lvl3, expected: 90, status: lvl3 === 90 ? 'PASS' : 'FAIL' },
+      level4: { detected: lvl4, expected: 90, status: lvl4 === 90 ? 'PASS' : 'FAIL' },
+      totalDetected: total,
+      totalExpected: 270,
+    };
+  }
+
   return {
     fileId,
     fileName,
@@ -1032,6 +1196,8 @@ export function parseWordContent(
     lessons: parsedLessons,
     errors,
     rawText,
+    isDebate,
+    debateLevelStats,
     totalUnitsDetected,
     detectedUnitsList,
     firstLessonNumber,
@@ -1055,6 +1221,8 @@ export function convertImportedLessonToDictation(
   passage: string;
   exercise: DictationExercise;
   group?: string;
+  level?: string;
+  lessonCode?: string;
   grade?: string;
   unit?: string;
   unitTitle?: string;
@@ -1145,17 +1313,28 @@ export function convertImportedLessonToDictation(
     passageLines.push(lesson.title);
   }
 
+  const isDebate =
+    lesson.detectedGroup?.toUpperCase() === 'DEBATE' ||
+    Boolean(lesson.detectedLevel) ||
+    /^[Ll][234]-/i.test(lesson.lessonCode || '');
+
   const classLevel =
-    assignedClass || lesson.detectedClass || lesson.detectedGrade || 'General';
+    assignedClass ||
+    (isDebate && lesson.detectedLevel ? `DEBATE LEVEL ${lesson.detectedLevel}` : undefined) ||
+    lesson.detectedClass ||
+    lesson.detectedGrade ||
+    'General';
 
   // Clean title formatting:
-  // If title already starts with Lesson/Unit/Bài, use it directly. Otherwise format "Lesson X: Title"
+  // For Debate lessons, keep title exactly as lesson.title (Requirement 4: title = QUESTION / TOPIC)
   let displayTitle = lesson.title;
-  if (
-    !/^(?:Lesson|Unit|Bài|Bai)\s+[0-9]+/i.test(lesson.title) &&
-    lesson.lessonNumber
-  ) {
-    displayTitle = `Lesson ${lesson.lessonNumber}: ${lesson.title}`;
+  if (!isDebate) {
+    if (
+      !/^(?:Lesson|Unit|Bài|Bai)\s+[0-9]+/i.test(lesson.title) &&
+      lesson.lessonNumber
+    ) {
+      displayTitle = `Lesson ${lesson.lessonNumber}: ${lesson.title}`;
+    }
   }
 
   const exercise: DictationExercise = {
@@ -1176,7 +1355,9 @@ export function convertImportedLessonToDictation(
     topic: lesson.title,
     passage: passageLines.join('\n'),
     exercise,
-    group: lesson.detectedGroup,
+    group: isDebate ? 'DEBATE' : lesson.detectedGroup,
+    level: lesson.detectedLevel,
+    lessonCode: lesson.lessonCode,
     grade: lesson.detectedGrade,
     unit: lesson.unitNumber || lesson.detectedUnit,
     unitTitle: lesson.unitTitle || lesson.detectedUnitTitle,

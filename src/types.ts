@@ -78,6 +78,8 @@ export interface SavedDictationItem {
   translation?: string; // Vietnamese translation
   exercise: DictationExercise;
   group?: string; // Optional GROUP hint (e.g. "Mầm non", "Lớp 3", "Debate", "IELTS")
+  level?: string; // Optional LEVEL hint (e.g. "2", "3", "4" for Debate)
+  lessonCode?: string; // Optional LESSON CODE (e.g. "L2-001", "L3-090", "L4-001")
   grade?: string; // Optional GRADE hint (e.g. "3", "Grade 3")
   unit?: string; // Optional UNIT hint (e.g. "4", "Unit 4")
   unitTitle?: string; // Optional UNIT TITLE hint (e.g. "MUSIC AND ARTS")

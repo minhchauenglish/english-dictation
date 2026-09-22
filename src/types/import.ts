@@ -22,6 +22,8 @@ export interface ImportedLesson {
   detectedClass?: string;
   detectedGrade?: string;
   detectedGroup?: string;
+  detectedLevel?: string;
+  lessonCode?: string;
   unitNumber?: string;
   unitTitle?: string;
   detectedUnit?: string;
@@ -45,6 +47,7 @@ export interface ImportFileResult {
   detectedClass?: string;
   detectedGrade?: string;
   detectedGroup?: string;
+  detectedLevel?: string;
   unitNumber?: string;
   unitTitle?: string;
   detectedUnit?: string;
@@ -52,6 +55,15 @@ export interface ImportFileResult {
   lessons: ImportedLesson[];
   errors: string[];
   rawText?: string;
+  // Debate stats:
+  isDebate?: boolean;
+  debateLevelStats?: {
+    level2: { detected: number; expected: number; status: 'PASS' | 'FAIL' };
+    level3: { detected: number; expected: number; status: 'PASS' | 'FAIL' };
+    level4: { detected: number; expected: number; status: 'PASS' | 'FAIL' };
+    totalDetected: number;
+    totalExpected: number;
+  };
   // Audit / Post-parse diagnostics:
   totalUnitsDetected?: number;
   detectedUnitsList?: string[];

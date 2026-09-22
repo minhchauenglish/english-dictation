@@ -18,6 +18,7 @@ import {
 import { SavedDictationItem, DictationExercise } from '../../types';
 import { clientStorage } from '../../utils/storage';
 import { WordImportModal } from './WordImportModal';
+import { DuplicateManagerModal } from './DuplicateManagerModal';
 import {
   buildLibraryFilterHierarchy,
   itemMatchesFilter,
@@ -49,6 +50,7 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
   const [selectedSubLevel, setSelectedSubLevel] = useState<string>('ALL');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isWordImportOpen, setIsWordImportOpen] = useState(false);
+  const [isDuplicateManagerOpen, setIsDuplicateManagerOpen] = useState(false);
 
   // Derive two-level filter hierarchy from existing dictations and teacher classes
   const filterHierarchy = useMemo(() => {
@@ -153,6 +155,17 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
           >
             <Plus className="w-4 h-4" />
             <span>Tạo bài mới</span>
+          </button>
+
+          <button
+            id="btn-library-check-duplicates"
+            type="button"
+            onClick={() => setIsDuplicateManagerOpen(true)}
+            className="px-3.5 sm:px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 hover:border-slate-400 font-extrabold text-xs sm:text-sm shadow-2xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+            title="Quét và dọn dẹp các bài học bị trùng lặp trong thư viện"
+          >
+            <Search className="w-4 h-4 text-indigo-600" />
+            <span>🔍 Kiểm tra bài trùng</span>
           </button>
 
           <button
@@ -452,6 +465,17 @@ export const DictationLibraryTab: React.FC<DictationLibraryTabProps> = ({
         onClose={() => setIsWordImportOpen(false)}
         onImportSuccess={handleWordImportSuccess}
       />
+
+      {/* Duplicate Manager Modal */}
+      {isDuplicateManagerOpen && (
+        <DuplicateManagerModal
+          onClose={() => setIsDuplicateManagerOpen(false)}
+          onLibraryUpdated={() => {
+            setDictations(clientStorage.getSavedDictations());
+            onLibraryUpdated?.();
+          }}
+        />
+      )}
     </div>
   );
 };

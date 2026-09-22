@@ -30,3 +30,8 @@ npm install
 npm run build
 ```
 The output in `dist/` can be served from any static web server, GitHub Pages, Vercel, Netlify, or Cloudflare Pages.
+
+
+## GitHub Pages initial library seed
+
+The GitHub Pages deployment can be initialized once from the teacher backup exported on 2026-09-22. On `*.github.io`, the app loads `public/library-seed.json` before React starts, writes the library/classes/assignments/homework history to browser storage, and records a one-time seed marker. Existing AI Studio data is not affected because the seed loader is restricted to GitHub Pages.

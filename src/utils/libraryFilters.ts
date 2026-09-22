@@ -233,6 +233,10 @@ function extractSubLevel(mainGroup: string, rawText: string): string | undefined
   }
 
   if (mainGroup === 'Debate') {
+    const codeMatch = rawText.match(/\b[Ll]([234])-\d{2,4}\b/i);
+    if (codeMatch && codeMatch[1]) {
+      return `Level ${codeMatch[1]}`;
+    }
     const lvlMatch = rawText.match(/level\s*(\d+)/i) || norm.match(/cap\s*do\s*(\d+)/i);
     if (lvlMatch && lvlMatch[1]) {
       return `Level ${lvlMatch[1]}`;
@@ -263,8 +267,19 @@ export function classifyExerciseItem(
   item: SavedDictationItem,
   teacherClasses: TeacherClass[] = []
 ): LevelFilterClassification {
-  // A. Explicit GROUP field
+  // A. Explicit GROUP field or Debate check
   let mainGroup = resolveMainGroupFromGroupField(item.group);
+
+  // Direct Debate classification guarantee:
+  if (
+    !mainGroup &&
+    (Boolean(item.level) ||
+      /^[Ll][234]-/i.test(item.lessonCode || '') ||
+      Boolean(item.group && /DEBATE/i.test(item.group)) ||
+      Boolean(item.classLevel && /DEBATE/i.test(item.classLevel)))
+  ) {
+    mainGroup = 'Debate';
+  }
 
   // B. GRADE field
   if (!mainGroup) {
@@ -323,8 +338,19 @@ export function classifyExerciseItem(
   }
 
   // Sublevel extraction
-  const searchSource = `${item.group || ''} ${item.grade || ''} ${rawClassLevel} ${item.topic || ''}`;
-  const subLevel = extractSubLevel(mainGroup, searchSource);
+  let subLevel: string | undefined;
+  if (mainGroup === 'Debate') {
+    if (item.level) {
+      subLevel = `Level ${item.level}`;
+    } else if (item.lessonCode) {
+      const m = item.lessonCode.match(/^[Ll]([234])-/i);
+      if (m) subLevel = `Level ${m[1]}`;
+    }
+  }
+  if (!subLevel) {
+    const searchSource = `${item.level ? `Level ${item.level}` : ''} ${item.lessonCode || ''} ${item.group || ''} ${item.grade || ''} ${rawClassLevel} ${item.topic || ''} ${item.title || ''}`;
+    subLevel = extractSubLevel(mainGroup, searchSource);
+  }
 
   return {
     mainGroup,

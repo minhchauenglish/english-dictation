@@ -11,6 +11,7 @@ import {
   Calendar,
   Rocket,
   CheckCircle2,
+  Mic2,
 } from 'lucide-react';
 import {
   DictationExercise,
@@ -21,13 +22,14 @@ import {
 import { clientStorage } from '../../utils/storage';
 import { DailyScheduleTab } from './DailyScheduleTab';
 import { DictationLibraryTab } from './DictationLibraryTab';
+import { DebateWorkspaceTab } from './DebateWorkspaceTab';
 import { ClassManagementTab } from './ClassManagementTab';
 import { HomeworkHistoryTab } from './HomeworkHistoryTab';
 import { HomeworkGenerateModal } from './HomeworkGenerateModal';
 import { DailyHomeworkModal } from './DailyHomeworkModal';
 import { TeacherCreateView } from '../TeacherCreateView';
 
-export type TeacherDashboardTab = 'schedule' | 'library' | 'create' | 'classes' | 'history';
+export type TeacherDashboardTab = 'schedule' | 'library' | 'debate' | 'create' | 'classes' | 'history';
 
 interface TeacherDashboardViewProps {
   onBackToHome: () => void;
@@ -54,6 +56,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
 
   // Quick live metrics
   const [savedCount, setSavedCount] = useState<number>(0);
+  const [debateCount, setDebateCount] = useState<number>(0);
   const [classCount, setClassCount] = useState<number>(0);
   const [historyCount, setHistoryCount] = useState<number>(0);
   const [assignedCount, setAssignedCount] = useState<number>(0);
@@ -75,7 +78,17 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
     const history = clientStorage.getHomeworkHistory();
     const assignments = clientStorage.getClassAssignments();
 
+    const debates = library.filter((d) => {
+      return (
+        d.group?.toUpperCase() === 'DEBATE' ||
+        Boolean(d.level) ||
+        /^[Ll][234]-/i.test(d.lessonCode || '') ||
+        Boolean(d.classLevel && /DEBATE/i.test(d.classLevel))
+      );
+    });
+
     setSavedCount(library.length);
+    setDebateCount(debates.length);
     setClassCount(classes.length);
     setHistoryCount(history.length);
     setAssignedCount(classes.filter((c) => !!assignments[c.id]).length);
@@ -226,6 +239,24 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             <span>Thư viện bài tập ({savedCount})</span>
           </button>
 
+          {/* Tab: Tranh biện (Debate) */}
+          <button
+            id="tab-btn-debate"
+            type="button"
+            onClick={() => {
+              setEditingItem(null);
+              setActiveTab('debate');
+            }}
+            className={`py-3 px-3.5 sm:px-4 font-extrabold text-xs sm:text-sm border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'debate'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/60'
+                : 'border-transparent text-slate-600 hover:text-purple-700 hover:border-purple-300'
+            }`}
+          >
+            <Mic2 className="w-4 h-4 text-purple-600" />
+            <span>🎙️ Debate ({debateCount})</span>
+          </button>
+
           {/* Tab 3: Create */}
           <button
             id="tab-btn-create"
@@ -297,6 +328,16 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             onOpenCreateNew={handleOpenCreateNew}
             onEditExercise={handleEditExercise}
             onPreviewExercise={onPreviewExercise}
+            onGenerateHomework={handleOpenHomeworkForSavedItem}
+            onLibraryUpdated={refreshCounts}
+          />
+        )}
+
+        {/* Tab: Debate Workspace */}
+        {activeTab === 'debate' && (
+          <DebateWorkspaceTab
+            onPreviewExercise={onPreviewExercise}
+            onEditExercise={handleEditExercise}
             onGenerateHomework={handleOpenHomeworkForSavedItem}
             onLibraryUpdated={refreshCounts}
           />

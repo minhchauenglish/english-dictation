@@ -208,7 +208,23 @@ export function buildDuplicateKey(opts: {
   unit?: string;
   lesson?: string;
   title: string;
+  level?: string;
+  lessonCode?: string;
 }): string {
+  const isDebate =
+    opts.group?.toUpperCase() === 'DEBATE' ||
+    Boolean(opts.level) ||
+    /^[Ll][234]-/i.test(opts.lessonCode || '');
+  if (isDebate) {
+    const lvl =
+      opts.level ||
+      (opts.lessonCode ? opts.lessonCode.match(/^[Ll]([234])-/i)?.[1] : '') ||
+      '';
+    const code = (opts.lessonCode || '').toUpperCase();
+    const lNum = normalizeLessonNumber(opts.lesson) || '';
+    const normTitle = normalizeTitle(opts.title);
+    return `DEBATE|${lvl}|${code || lNum}|${normTitle}`;
+  }
   const normGroup = normalizeGroup(opts.group) || '';
   const normGrade = getCanonicalGrade(opts.grade) || '';
   const normUnit = normalizeUnit(opts.unit) || '';
@@ -576,6 +592,9 @@ export function isDuplicateLesson(
     detectedGroup?: string;
     detectedGrade?: string;
     detectedClass?: string;
+    detectedLevel?: string;
+    level?: string;
+    lessonCode?: string;
     unitNumber?: string;
     unitTitle?: string;
     detectedUnit?: string;
@@ -584,6 +603,63 @@ export function isDuplicateLesson(
   existing: SavedDictationItem,
   context?: DuplicateCheckContext
 ): boolean {
+  // Check if incoming or existing is a DEBATE lesson
+  const incDebateLevel =
+    incoming.detectedLevel ||
+    incoming.level ||
+    (incoming.lessonCode ? incoming.lessonCode.match(/^[Ll]([234])-/i)?.[1] : undefined);
+  const extDebateLevel =
+    existing.level ||
+    (existing.lessonCode ? existing.lessonCode.match(/^[Ll]([234])-/i)?.[1] : undefined) ||
+    existing.classLevel?.match(/LEVEL\s*([234])/i)?.[1];
+
+  const isDebateInc =
+    incoming.detectedGroup?.toUpperCase() === 'DEBATE' ||
+    Boolean(incDebateLevel) ||
+    /^[Ll][234]-/i.test(incoming.lessonCode || '');
+  const isDebateExt =
+    existing.group?.toUpperCase() === 'DEBATE' ||
+    Boolean(extDebateLevel) ||
+    /^[Ll][234]-/i.test(existing.lessonCode || '') ||
+    Boolean(existing.classLevel && /DEBATE/i.test(existing.classLevel));
+
+  if (isDebateInc || isDebateExt) {
+    // If one is Debate and the other is NOT Debate => NOT DUPLICATE
+    if (!isDebateInc || !isDebateExt) return false;
+
+    // Both are Debate lessons
+    // If both have levels and they differ => NOT DUPLICATE (e.g. Level 2 vs Level 3)
+    if (incDebateLevel && extDebateLevel && incDebateLevel !== extDebateLevel) {
+      return false;
+    }
+
+    // If both have lessonCode (e.g. L2-001 vs L2-002)
+    if (incoming.lessonCode && existing.lessonCode) {
+      return (
+        incoming.lessonCode.trim().toUpperCase() ===
+        existing.lessonCode.trim().toUpperCase()
+      );
+    }
+
+    // Normalized titles
+    const incTitleNorm = normalizeTitle(incoming.title);
+    const extTitleNorm = normalizeTitle(existing.title);
+
+    // If both have lessonNumber
+    const incLesson = extractLessonNumber(incoming.lessonNumber, incoming.title);
+    const extLesson = extractLessonNumber(existing.lessonNumber, existing.title);
+    if (incLesson && extLesson && incLesson !== extLesson) {
+      return false;
+    }
+
+    if (incDebateLevel && extDebateLevel && incDebateLevel === extDebateLevel) {
+      if (incLesson && extLesson && incLesson === extLesson) return true;
+      if (incTitleNorm && extTitleNorm && incTitleNorm === extTitleNorm) return true;
+    }
+
+    return Boolean(incTitleNorm && extTitleNorm && incTitleNorm === extTitleNorm);
+  }
+
   // 1. Normalized title MUST match and be non-empty
   const incTitleNorm = normalizeTitle(incoming.title);
   const extTitleNorm = normalizeTitle(existing.title);
@@ -669,6 +745,9 @@ export function findDuplicateInLibrary(
     detectedGroup?: string;
     detectedGrade?: string;
     detectedClass?: string;
+    detectedLevel?: string;
+    level?: string;
+    lessonCode?: string;
     unitNumber?: string;
     unitTitle?: string;
     detectedUnit?: string;

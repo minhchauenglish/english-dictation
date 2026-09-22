@@ -403,6 +403,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
           passage: dictationData.passage,
           exercise: dictationData.exercise,
           group: dictationData.group,
+          level: dictationData.level,
+          lessonCode: dictationData.lessonCode,
           grade: dictationData.grade,
           unit: dictationData.unit,
           unitTitle: dictationData.unitTitle,
@@ -631,6 +633,84 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
 
         {/* Main Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/40">
+          {/* Debate Statistics Banner */}
+          {fileResults.some((f) => f.isDebate || f.debateLevelStats) && (
+            <div className="p-4 bg-indigo-900 text-white rounded-2xl shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-indigo-700 text-indigo-200 text-xs font-black uppercase tracking-wider">
+                    Debate Import Audit
+                  </span>
+                  <span className="text-xs text-indigo-200">
+                    Thống kê chi tiết từng level chương trình Debate (Level 2, 3, 4)
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
+                {fileResults.map((f) => {
+                  if (!f.debateLevelStats) return null;
+                  const stats = f.debateLevelStats;
+                  const totalDetected =
+                    (stats['2']?.detectedCount || 0) +
+                    (stats['3']?.detectedCount || 0) +
+                    (stats['4']?.detectedCount || 0);
+                  const totalExpected =
+                    (stats['2']?.expectedCount || 90) +
+                    (stats['3']?.expectedCount || 90) +
+                    (stats['4']?.expectedCount || 90);
+                  return (
+                    <React.Fragment key={f.fileId}>
+                      {(['2', '3', '4'] as const).map((lvl) => {
+                        const s = stats[lvl];
+                        if (!s) return null;
+                        const isPass = s.status === 'PASS';
+                        return (
+                          <div
+                            key={lvl}
+                            className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="text-xs font-bold text-slate-300">Level {lvl}</div>
+                              <div className="text-sm font-black text-white">
+                                {s.detectedCount} / {s.expectedCount} bài
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded text-xs font-black ${
+                                isPass
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              [{s.status}]
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="p-2.5 rounded-xl bg-indigo-950 border border-indigo-700/60 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-indigo-300">Tổng cộng</div>
+                          <div className="text-sm font-black text-white">
+                            {totalDetected} / {totalExpected} bài
+                          </div>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-black ${
+                            totalDetected === totalExpected
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
+                          }`}
+                        >
+                          {totalDetected === totalExpected ? '[FULL 270]' : `[${totalDetected} BÀI]`}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* File Audit / Diagnostic Summary Banner */}
           {fileResults.some((f) => f.auditWarning || (f.totalUnitsDetected && f.totalUnitsDetected > 1)) && (
             <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl text-xs space-y-1.5">
@@ -691,6 +771,16 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
                         <h4 className="font-black text-slate-900 text-sm sm:text-base">
                           {item.title}
                         </h4>
+                        {item.lessonCode && (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-300 text-xs font-black">
+                            {item.lessonCode}
+                          </span>
+                        )}
+                        {item.detectedLevel && (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 text-xs font-bold">
+                            Debate Level {item.detectedLevel}
+                          </span>
+                        )}
                         <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold uppercase tracking-wider">
                           {item.type.replace(/_/g, ' ')}
                         </span>
